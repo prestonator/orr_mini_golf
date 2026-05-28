@@ -23,7 +23,7 @@ function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000 }: Ani
   const { y } = useSpring({
     y: active ? 0 : dropHeight,
     from: { y: dropHeight },
-    config: { mass: 2, tension: 40, friction: 22, clamp: true },
+    config: { mass: 6, tension: 40, friction: 22, clamp: true },
     onChange: ({ value }) => {
       if (!active && value.y >= dropHeight - 0.05) {
         setVisible(false);
