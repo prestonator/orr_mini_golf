@@ -32,7 +32,7 @@ export default function Scene() {
       </div>
 
       {/* 3D Canvas */}
-      <Canvas camera={{ position: [50, 50, 50], fov: 45 }} shadows dpr={[1, 2]}>
+      <Canvas camera={{ position: [100, 100, 100], fov: 45 }} shadows dpr={[1, 2]}>
         <ambientLight intensity={0.5} />
         <directionalLight 
           position={[10, 20, 10]} 
@@ -50,7 +50,7 @@ export default function Scene() {
           target={[0, 0, 0]} 
           maxPolarAngle={Math.PI / 2.1} 
           minDistance={2} 
-          maxDistance={100}
+          maxDistance={200}
           makeDefault 
         />
 
