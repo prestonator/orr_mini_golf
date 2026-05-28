@@ -32,7 +32,7 @@ export default function Scene() {
       </div>
 
       {/* 3D Canvas */}
-      <Canvas camera={{ position: [100, 100, 100], fov: 45 }} shadows dpr={[1, 2]}>
+      <Canvas camera={{ position: [100, 100, 100], fov: 45 }} shadows="percentage" dpr={[1, 2]}>
         <ambientLight intensity={0.5} />
         <directionalLight 
           position={[10, 20, 10]} 
