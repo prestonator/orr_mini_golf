@@ -1,6 +1,6 @@
 "use client";
-import { useGLTF } from "@react-three/drei";
-import { useSpring, animated } from "@react-spring/three";
+import { useGLTF, Clone } from "@react-three/drei";
+import { useSpring, animated, config } from "@react-spring/three";
 
 interface StageObjectProps {
   modelPath: string;
@@ -15,18 +15,15 @@ export default function StageObject({ modelPath, dropHeight = 50 }: StageObjectP
   const { position } = useSpring({
     from: { position: [0, dropHeight, 0] as [number, number, number] },
     to: { position: [0, 0, 0] as [number, number, number] },
-    config: { mass: 2, tension: 150, friction: 20 }, // Gives a nice heavy "thud" feel
+    // Use an overdamped spring config to ensure it drops slowly and never goes below the floor
+    config: { mass: 2, tension: 40, friction: 22, clamp: true },
   });
 
-  // We wrap the primitive in an <animated.group> to apply the spring animation
+  // We wrap the Clone in an <animated.group> to apply the spring animation
+  // Clone is much more performant than scene.clone() for instancing/reusing materials
   return (
     <animated.group position={position}>
-      {/* clone element to avoid mutating the cached GLTF scene */}
-      <primitive object={scene.clone()} /> 
+      <Clone object={scene} castShadow receiveShadow />
     </animated.group>
   );
 }
-
-// Preload models for performance
-useGLTF.preload("/models/stage-1.glb");
-// Add other preloads if needed
