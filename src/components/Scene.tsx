@@ -2,11 +2,11 @@
 import { useState, Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
-import { Homestead } from "./Homestead";
+import { Homestead2 } from "./Homestead2";
 
 export default function Scene() {
   const [currentStage, setCurrentStage] = useState(1);
-  const totalStages = 3;
+  const totalStages = 26;
 
   return (
     <div className="relative w-full h-screen">
@@ -32,7 +32,7 @@ export default function Scene() {
       </div>
 
       {/* 3D Canvas */}
-      <Canvas camera={{ position: [25, 25, 25], fov: 45 }} shadows dpr={[1, 2]}>
+      <Canvas camera={{ position: [50, 50, 50], fov: 45 }} shadows dpr={[1, 2]}>
         <ambientLight intensity={0.5} />
         <directionalLight 
           position={[10, 20, 10]} 
@@ -55,7 +55,7 @@ export default function Scene() {
         />
 
         <Suspense fallback={null}>
-          <Homestead currentStage={currentStage} />
+          <Homestead2 currentStage={currentStage} />
         </Suspense>
       </Canvas>
     </div>
