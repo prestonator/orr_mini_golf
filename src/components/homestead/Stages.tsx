@@ -468,7 +468,7 @@ export function Stages({ nodes, materials, currentStage }: { nodes: any, materia
         </AnimatedGroup>
 
         {/* Stage 26: The Finale (Empty payload to allow Celebration Effect to run without spinning a building!) */}
-        <AnimatedGroup stage={26} currentStage={currentStage}>
+        <AnimatedGroup stage={26} currentStage={currentStage} children={undefined}>
           {/* Deliberately left empty */}
         </AnimatedGroup>
 
