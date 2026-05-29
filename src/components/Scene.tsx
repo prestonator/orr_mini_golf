@@ -4,6 +4,33 @@ import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
 import { Homestead2 } from "./Homestead";
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { useThree } from '@react-three/fiber'
+import { useEffect } from 'react'
+
+function ResponsiveCamera() {
+  const { camera, size } = useThree()
+  
+  useEffect(() => {
+    // Check if we are on a narrow mobile screen
+    const isMobile = size.width < 768;
+    
+    // On mobile, widen the FOV and adjust position so it doesn't look zoomed in and off-center
+    // Type assertion used since we know it's a PerspectiveCamera
+    const cam = camera as any;
+    cam.fov = isMobile ? 65 : 45;
+    
+    // Slightly shift the camera to better center the view on mobile
+    if (isMobile) {
+      cam.position.set(120, 120, 120);
+    } else {
+      cam.position.set(100, 100, 100);
+    }
+    
+    cam.updateProjectionMatrix();
+  }, [size, camera]);
+  
+  return null;
+}
 
 export default function Scene() {
   const [currentStage, setCurrentStage] = useState(1);
@@ -54,6 +81,7 @@ export default function Scene() {
 
       {/* 3D Canvas */}
       <Canvas gl={{ logarithmicDepthBuffer: true }} camera={{ position: [100, 100, 100], fov: 45 }} shadows="percentage" dpr={[1, 2]}>
+        <ResponsiveCamera />
         <ambientLight intensity={0.5} />
         <directionalLight 
           position={[10, 20, 10]} 
