@@ -2,7 +2,7 @@
 import { useState, Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
-import { Homestead2 } from "./Homestead2";
+import { Homestead2 } from "./Homestead";
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 
 export default function Scene() {
