@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useGLTF, Text, Sparkles } from '@react-three/drei'
+import { useGLTF, Text, Sparkles, Html } from '@react-three/drei'
 import { useSpring, animated } from '@react-spring/three'
 
 interface AnimatedGroupProps {
@@ -7,20 +7,16 @@ interface AnimatedGroupProps {
   stage: number;
   currentStage: number;
   dropHeight?: number;
+  animType?: 'drop' | 'grow' | 'wobble';
 }
 
-function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000 }: AnimatedGroupProps) {
+function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000, animType = 'drop' }: AnimatedGroupProps) {
   const active = currentStage >= stage;
   const [visible, setVisible] = useState(active);
 
-  if (active && !visible) {
-    setVisible(true);
-  }
-
-  // We use the Y axis for dropHeight since Homestead2 is scaled differently.
+  // The Drop Animation (Buildings/Objects)
   const { y } = useSpring({
-    y: active ? stage * 0.5 : dropHeight,
-    from: { y: dropHeight },
+    y: active ? (stage * 0.5) : dropHeight,
     config: { mass: 6, tension: 40, friction: 22, clamp: true },
     onChange: ({ value }) => {
       if (!active && value.y >= dropHeight - 0.05) {
@@ -29,36 +25,56 @@ function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000 }: Ani
     },
   });
 
-  // Add celebratory rotation for stage 26
-  const { rotationY } = useSpring({
-    rotationY: (active && stage === 26) ? Math.PI * 2 : 0,
-    from: { rotationY: 0 },
-    config: { mass: 1, tension: 20, friction: 10 },
+  // The Grow Animation (Plants/Crops)
+  const { scale } = useSpring({
+    scale: active ? 1 : 0,
+    config: { mass: 1, tension: 120, friction: 14 }
   });
 
-  return (
-    <animated.group position={y.to((val) => [0, val, 0]) as any} rotation-y={rotationY} visible={visible}>
-      {children}
-    </animated.group>
-  );
+  // The Wobble Animation (Outhouse)
+  const { rotateZ } = useSpring({
+    rotateZ: active ? 0 : 0.5, // Starts tilted
+    config: { mass: 3, tension: 200, friction: 5 } // Highly bouncy/wobbly
+  });
+
+  if (active && !visible) setVisible(true);
+
+  if (animType === 'grow') {
+    return <animated.group scale={scale} visible={visible}>{children}</animated.group>
+  }
+
+  if (animType === 'wobble') {
+    return <animated.group position-y={y} rotation-z={rotateZ} visible={visible}>{children}</animated.group>
+  }
+
+  return <animated.group position-y={y} visible={visible}>{children}</animated.group>
 }
 
 function CelebrationEffect({ currentStage }: { currentStage: number }) {
   const active = currentStage === 26;
-  const { scale } = useSpring({
-    scale: active ? 1 : 0,
-    config: { tension: 120, friction: 14 }
-  });
-
   if (!active) return null;
 
   return (
-    <animated.group scale={scale as any}>
-      <Sparkles count={300} scale={100} size={40} speed={0.4} color="#ffdf00" />
-      <Text position={[0, 50, 0]} fontSize={20} color="#ffffff" anchorX="center" anchorY="middle">
-        Farm Completed!
-      </Text>
-    </animated.group>
+    <group>
+      <Sparkles count={500} scale={100} size={40} speed={0.4} color="#ffdf00" />
+      {/* This renders a standard DOM element over the canvas */}
+      <Html center position={[0, 50, 0]} zIndexRange={[100, 0]}>
+        <div className="bg-white/90 backdrop-blur-md p-8 rounded-xl shadow-2xl w-96 text-center border-4 border-yellow-500">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Congratulations!</h2>
+          <p className="text-gray-600 mb-6">
+            You have proven up your 160-acre plot! You are eligible for the $20,000 Land Rush Tournament!
+          </p>
+          <input 
+            type="email" 
+            placeholder="Enter your email" 
+            className="w-full p-3 border rounded mb-4 text-black"
+          />
+          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded transition-colors">
+            Claim Certificate of Homestead
+          </button>
+        </div>
+      </Html>
+    </group>
   );
 }
 
@@ -142,14 +158,14 @@ export function Homestead2({ currentStage, ...props }: React.ComponentPropsWitho
         </AnimatedGroup>
 
         {/* Stage 6: Tilling the Garden */}
-        <AnimatedGroup stage={6} currentStage={currentStage}>
+        <AnimatedGroup stage={6} currentStage={currentStage} animType="grow">
           <mesh geometry={nodes.Env_Dirt_Plough_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[-5000, 0, 1000]} scale={[4, 1, 1]} />
           <mesh geometry={nodes.Env_Dirt_Plough_1_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[-5000, 0, 2000]} scale={[2, 1, 1]} />
           <mesh geometry={nodes.Env_Dirt_Plough_2_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[-2000, 0, 0]} />
         </AnimatedGroup>
 
         {/* Stage 7: Planting Seedlings */}
-        <AnimatedGroup stage={7} currentStage={currentStage}>
+        <AnimatedGroup stage={7} currentStage={currentStage} animType="grow">
           <mesh geometry={nodes.Env_Crop_Seedling_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[-3000, 0, 2000]} scale={[2, 1, 1]} />
           <mesh geometry={nodes.Env_Crop_Seedling_1_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[0, 0, 2000]} scale={[3, 1, 1]} />
           <group position={[-5000, 0, -1000]}>
@@ -159,7 +175,7 @@ export function Homestead2({ currentStage, ...props }: React.ComponentPropsWitho
         </AnimatedGroup>
 
         {/* Stage 8: Mature Harvest */}
-        <AnimatedGroup stage={8} currentStage={currentStage}>
+        <AnimatedGroup stage={8} currentStage={currentStage} animType="grow">
           <group position={[-5000, 0, -2000]}>
             <mesh geometry={nodes.Env_Crop_Cabbage_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[0, 0, 0]} />
           </group>
@@ -349,14 +365,14 @@ export function Homestead2({ currentStage, ...props }: React.ComponentPropsWitho
         </AnimatedGroup>
 
         {/* Stage 21: Year 1 - Bare Trees */}
-        <AnimatedGroup stage={21} currentStage={currentStage}>
+        <AnimatedGroup stage={21} currentStage={currentStage} animType="grow">
           <mesh geometry={nodes.Prop_Tree_NoApples_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[1170, 0, 2705]} rotation={[0, 0.287, 0]} />
           <mesh geometry={nodes.Prop_Tree_NoLemons_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[701, 0, 2250]} />
           <mesh geometry={nodes.Prop_Tree_NoOranges_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[1170, 0, 2250]} rotation={[0, -0.416, 0]} />
         </AnimatedGroup>
 
         {/* Stage 22: Year 2 - Fruit Trees */}
-        <AnimatedGroup stage={22} currentStage={currentStage}>
+        <AnimatedGroup stage={22} currentStage={currentStage} animType="grow">
           <mesh geometry={nodes.Prop_Tree_Apple_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[2809.414, -2.34, 759.113]} rotation={[0, -0.486, 0]} />
           <mesh geometry={nodes.Prop_Tree_Apple_1_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[1750.369, -2.34, 4038.941]} rotation={[0, 0.464, 0]} />
           <mesh geometry={nodes.Prop_Tree_Apple_2_SimpleFarm_0.geometry} material={materials['SimpleFarm.001']} position={[2802.088, -2.34, 326.441]} rotation={[0, 0.113, 0]} />

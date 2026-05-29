@@ -3,6 +3,7 @@ import { useState, Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
 import { Homestead2 } from "./Homestead2";
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 
 export default function Scene() {
   const [currentStage, setCurrentStage] = useState(1);
@@ -56,6 +57,11 @@ export default function Scene() {
 
         <Suspense fallback={null}>
           <Homestead2 currentStage={currentStage} />
+          {currentStage === 26 && (
+            <EffectComposer>
+              <Bloom luminanceThreshold={0.5} luminanceSmoothing={0.9} height={300} intensity={1.5} />
+            </EffectComposer>
+          )}
         </Suspense>
       </Canvas>
     </div>
