@@ -70,7 +70,7 @@ export function CelebrationEffect({ currentStage }: { currentStage: number }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function Homestead2({ currentStage, ...props }: React.ComponentPropsWithoutRef<'group'> & { currentStage: number }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { nodes, materials } = useGLTF('/homestead2.glb') as any
+  const { nodes, materials } = useGLTF('/homestead.glb') as any
   
   return (
     <group {...props} dispose={null}>
