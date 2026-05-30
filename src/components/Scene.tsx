@@ -1,11 +1,9 @@
 "use client";
-import { useState, Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Environment, OrbitControls } from "@react-three/drei";
+import { useState, Suspense, useEffect } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import { Homestead2 } from "./Homestead";
-import { EffectComposer, Bloom } from '@react-three/postprocessing'
-import { useThree } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
 
 function ResponsiveCamera() {
   const { camera, size } = useThree()
@@ -14,16 +12,18 @@ function ResponsiveCamera() {
     // Check if we are on a narrow mobile screen
     const isMobile = size.width < 768;
     
-    // On mobile, widen the FOV and adjust position so it doesn't look zoomed in and off-center
     // Type assertion used since we know it's a PerspectiveCamera
     const cam = camera as any;
-    cam.fov = isMobile ? 65 : 45;
+
+    // Drastically lower FOV for the sleek, flat "isometric diorama" look
+    cam.fov = isMobile ? 35 : 20; 
     
-    // Slightly shift the camera to better center the view on mobile
+    // Because we lowered the FOV, we must pull the camera further back to fit the scene.
+    // Positioned in the negative-X corner to get a nice diagonal strategy-game angle.
     if (isMobile) {
-      cam.position.set(120, 120, 120);
+      cam.position.set(-200, 160, 200);
     } else {
-      cam.position.set(100, 100, 100);
+      cam.position.set(-160, 120, 160);
     }
     
     cam.updateProjectionMatrix();
@@ -80,36 +80,63 @@ export default function Scene() {
       )}
 
       {/* 3D Canvas */}
-      <Canvas gl={{ logarithmicDepthBuffer: true }} camera={{ position: [100, 100, 100], fov: 45 }} shadows="percentage" dpr={[1, 2]}>
+      <Canvas gl={{ logarithmicDepthBuffer: true }} shadows dpr={[1, 2]}>
+        {/* 1. The Warm Sunrise Background */}
+        <color attach="background" args={["#e69e45"]} />
+
         <ResponsiveCamera />
-        <ambientLight intensity={0.5} />
+
+        {/* 2. Soft Shadows temporarily removed due to three.js compatibility issues with unpackRGBAToDepth */}
+        {/* <SoftShadows size={30} samples={10} focus={0.5} /> */}
+
+        {/* 3. Hemisphere Light to warm up the dark side of the shadows */}
+        <hemisphereLight intensity={0.4} color="#ffffff" groundColor="#a35d1a" />
+        
+        {/* 4. The Golden Sun (Directional Light) casting the long shadows */}
         <directionalLight 
-          position={[10, 20, 10]} 
-          intensity={1.5} 
+          position={[-40, 30, -20]} // Low angle to push shadows beautifully across the map
+          intensity={2.5} 
+          color="#ffc777"
           castShadow 
           shadow-mapSize={[2048, 2048]} 
           shadow-bias={-0.0001}
-        />
-        
-        {/* Nice realistic lighting/reflections */}
-        <Environment preset="city" />
+        >
+          {/* Shadow camera bounds strictly defining the shadow rendering area */}
+          <orthographicCamera 
+            attach="shadow-camera" 
+            args={[-120, 120, 120, -120, 0.1, 500]} 
+          />
+        </directionalLight>
         
         {/* Allows the user to rotate around the land */}
         <OrbitControls 
           target={[0, 0, 0]} 
           maxPolarAngle={Math.PI / 2.1} 
-          minDistance={2} 
-          maxDistance={200}
+          minDistance={10} 
+          maxDistance={300}
           makeDefault 
         />
 
         <Suspense fallback={null}>
           <Homestead2 currentStage={currentStage} />
-          {currentStage === 26 && (
-            <EffectComposer>
-              <Bloom luminanceThreshold={0.5} luminanceSmoothing={0.9} height={300} intensity={1.5} />
-            </EffectComposer>
-          )}
+          
+          {/* Post Processing Composer applies to everything */}
+          <EffectComposer>
+            {/* Tiny bit of film grain makes the flat lighting feel cinematic */}
+            <Noise opacity={0.03} /> 
+            
+            {/* Darkens the screen edges to frame the diorama */}
+            <Vignette eskil={false} offset={0.1} darkness={0.9} />
+            
+            {/* The magic glow only fires on the final stage */}
+            <Bloom 
+              enabled={currentStage === 26} 
+              luminanceThreshold={0.5} 
+              luminanceSmoothing={0.9} 
+              height={300} 
+              intensity={1.5} 
+            />
+          </EffectComposer>
         </Suspense>
       </Canvas>
     </div>

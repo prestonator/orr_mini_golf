@@ -1,7 +1,8 @@
 import { Stages } from './homestead/Stages'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useGLTF, Sparkles } from '@react-three/drei'
 import { useSpring, animated } from '@react-spring/three'
+import * as THREE from 'three'
 
 interface AnimatedGroupProps {
   children: React.ReactNode;
@@ -70,7 +71,29 @@ export function CelebrationEffect({ currentStage }: { currentStage: number }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function Homestead2({ currentStage, ...props }: React.ComponentPropsWithoutRef<'group'> & { currentStage: number }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { nodes, materials } = useGLTF('/homestead.glb') as any
+  const { scene, nodes, materials } = useGLTF('/homestead.glb') as any
+
+  // THE MAGIC SLEEK UPGRADE
+  useEffect(() => {
+    if (!scene) return;
+    
+    scene.traverse((child: THREE.Object3D) => {
+      // If the item is a mesh (building, ground, tractor)
+      if (child instanceof THREE.Mesh) {
+        // 1. Turn on shadows!
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        // 2. Make it look sleek, flat, and low-poly
+        if (child.material) {
+          child.material.flatShading = true; // Gives that crisp, faceted look
+          child.material.roughness = 0.9;    // Makes it perfectly matte like clay/paper
+          child.material.metalness = 0.0;    // Removes weird AI glossiness
+          child.material.needsUpdate = true; // Tells React to redraw the material
+        }
+      }
+    });
+  }, [scene]);
   
   return (
     <group {...props} dispose={null}>
