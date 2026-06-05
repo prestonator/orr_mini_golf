@@ -20,7 +20,7 @@ export async function login(formData: FormData) {
 
   // Create a new visit record for this login
   if (authData.user?.id) {
-    await supabase.from('visits').insert({ user_id: authData.user.id })
+    await supabase.rpc('create_visit_for_user', { target_user_id: authData.user.id })
   }
 
   revalidatePath('/', 'layout')
@@ -49,7 +49,7 @@ export async function signup(formData: FormData) {
 
   // Create a new visit record for this signup
   if (authData.user?.id) {
-    await supabase.from('visits').insert({ user_id: authData.user.id })
+    await supabase.rpc('create_visit_for_user', { target_user_id: authData.user.id })
   }
 
   revalidatePath('/', 'layout')
