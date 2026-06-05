@@ -12,7 +12,7 @@ export default async function LoginPage({
   const host = headersList.get('host') || ''
   
   if (host.includes('localhost') || host.includes('127.0.0.1')) {
-    redirect('/game')
+    redirect('/map')
   }
 
   const resolvedSearchParams = await searchParams

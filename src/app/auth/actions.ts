@@ -19,7 +19,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/game')
+  redirect('/map')
 }
 
 export async function signup(formData: FormData) {
@@ -43,7 +43,7 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/game')
+  redirect('/map')
 }
 
 export async function signInWithGoogle() {
