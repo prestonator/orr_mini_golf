@@ -11,9 +11,9 @@ export default function OklahomaPlotMap() {
 
   // State Management
   const [pendingPlots, setPendingPlots] = useState<number[]>([]);
-  const [ownedPlots, setOwnedPlots] = useState<number[]>([]);
-  const [myPlots, setMyPlots] = useState<number[]>([]);
+  const [plotDetails, setPlotDetails] = useState<Record<number, { initials: string, color: string, isMine: boolean }>>({});
   const [userTier, setUserTier] = useState(0);
+  const [myProfile, setMyProfile] = useState<{ full_name: string, color: string } | null>(null);
   const [canClaim, setCanClaim] = useState(false);
   const [loading, setLoading] = useState(true);
   
@@ -28,13 +28,31 @@ export default function OklahomaPlotMap() {
   const GRID_ROWS = 30;
   const totalPlots = GRID_COLS * GRID_ROWS;
 
+  // Helper to extract initials
+  const getInitials = (name?: string) => {
+    if (!name) return '??';
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+
   useEffect(() => {
     async function loadData() {
-      const { plots, currentUserId, userTier: tier, canClaim: _canClaim } = await getMapState();
+      const { plots, currentUserId, userTier: tier, canClaim: _canClaim, myProfile: profile } = await getMapState();
+      
+      const newPlotDetails: Record<number, { initials: string, color: string, isMine: boolean }> = {};
       if (plots) {
-        setOwnedPlots(plots.filter((p: any) => p.owner_id && p.owner_id !== currentUserId).map((p: any) => p.id));
-        setMyPlots(plots.filter((p: any) => p.owner_id === currentUserId).map((p: any) => p.id));
+        plots.forEach((p: any) => {
+          if (p.owner_id && p.profiles) {
+            newPlotDetails[p.id] = {
+              initials: getInitials(p.profiles.full_name),
+              color: p.profiles.color || '#3B82F6',
+              isMine: p.owner_id === currentUserId
+            };
+          }
+        });
       }
+      
+      setPlotDetails(newPlotDetails);
+      setMyProfile(profile);
       setUserTier(tier);
       setCanClaim(_canClaim);
       setLoading(false);
@@ -43,7 +61,7 @@ export default function OklahomaPlotMap() {
   }, []);
 
   const handlePlotClick = (plotId: number) => {
-    if (ownedPlots.includes(plotId) || myPlots.includes(plotId) || pendingPlots.includes(plotId)) return;
+    if (plotDetails[plotId] || pendingPlots.includes(plotId)) return;
     
     if (!canClaim) {
       alert("You have already claimed a plot for this visit. Please check in again to claim another.");
@@ -72,7 +90,18 @@ export default function OklahomaPlotMap() {
 
     // Success! Update local state just in case, before routing
     setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
-    setMyPlots([...myPlots, activePlot]);
+    
+    if (myProfile) {
+      setPlotDetails(prev => ({
+        ...prev,
+        [activePlot]: {
+          initials: getInitials(myProfile.full_name),
+          color: myProfile.color || '#3B82F6',
+          isMine: true
+        }
+      }));
+    }
+    
     setUserTier((res as any).newTier);
     setCanClaim(false);
     
@@ -148,21 +177,37 @@ export default function OklahomaPlotMap() {
             >
               {Array.from({ length: totalPlots }).map((_, idx) => {
                 const isPending = pendingPlots.includes(idx);
-                const isOwnedByMe = myPlots.includes(idx);
-                const isOwnedByOther = ownedPlots.includes(idx);
+                const details = plotDetails[idx];
+                const isOwnedByMe = details?.isMine;
+                const isOwnedByOther = details && !details.isMine;
                 
-                let plotStyle = "border border-gray-500/20 hover:bg-blue-400/40 hover:border-blue-400 cursor-pointer transition-all duration-150";
-                if (isPending) plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait shadow-inner";
-                if (isOwnedByMe) plotStyle = "bg-green-500/60 border-green-600 cursor-not-allowed shadow-inner";
-                if (isOwnedByOther) plotStyle = "bg-red-500/60 border-red-600 cursor-not-allowed opacity-50";
+                let plotStyle = "border border-gray-500/20 hover:bg-blue-400/40 hover:border-blue-400 cursor-pointer transition-all duration-150 flex items-center justify-center overflow-hidden";
+                let overlayStyle = {};
+                
+                if (isPending) {
+                  plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait shadow-inner flex items-center justify-center overflow-hidden";
+                } else if (isOwnedByMe || isOwnedByOther) {
+                  plotStyle = "cursor-not-allowed flex items-center justify-center overflow-hidden font-bold text-[0.45rem] shadow-sm";
+                  // Custom styling based on their profile color
+                  overlayStyle = {
+                    backgroundColor: `${details.color}80`, // 80 is 50% opacity hex
+                    borderColor: details.color,
+                    borderWidth: isOwnedByMe ? '2px' : '1px',
+                    color: '#ffffff',
+                    textShadow: '0px 0px 2px rgba(0,0,0,0.8)'
+                  };
+                }
 
                 return (
                   <div
                     key={idx}
                     onClick={() => handlePlotClick(idx)}
                     className={plotStyle}
+                    style={overlayStyle}
                     title={`Plot #${idx}`}
-                  />
+                  >
+                    {details && !isPending && details.initials}
+                  </div>
                 );
               })}
             </div>

@@ -77,20 +77,24 @@ export async function getMapState() {
   const supabase = await createClient()
   const { data: plots } = await supabase
     .from('plots')
-    .select('id, owner_id')
+    .select('id, owner_id, profiles(full_name, color)')
   
   const { data: { user } } = await supabase.auth.getUser()
   
   let userTier = 0
   let canClaim = false
+  let myProfile = null
 
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('tier')
+      .select('tier, full_name, color')
       .eq('id', user.id)
       .single()
-    if (profile) userTier = profile.tier
+    if (profile) {
+      userTier = profile.tier
+      myProfile = profile
+    }
 
     const { data: visits } = await supabase
       .from('visits')
@@ -102,7 +106,7 @@ export async function getMapState() {
     canClaim = !!visits && visits.length > 0
   }
 
-  return { plots, currentUserId: user?.id, userTier, canClaim }
+  return { plots, currentUserId: user?.id, userTier, canClaim, myProfile }
 }
 
 export async function getUserTier() {
