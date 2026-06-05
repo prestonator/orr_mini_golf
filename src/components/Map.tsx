@@ -1,9 +1,52 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { getMapState, claimPlot } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
+
+const PlotSquare = memo(({ 
+  idx, 
+  details, 
+  isPending, 
+  onClick 
+}: { 
+  idx: number, 
+  details?: { initials: string, color: string, isMine: boolean }, 
+  isPending: boolean, 
+  onClick: (idx: number) => void 
+}) => {
+  const isOwnedByMe = details?.isMine;
+  const isOwnedByOther = details && !details.isMine;
+  
+  let plotStyle = "border border-gray-500/20 hover:bg-blue-400/40 hover:border-blue-400 cursor-pointer transition-all duration-150 flex items-center justify-center overflow-hidden";
+  let overlayStyle = {};
+  
+  if (isPending) {
+    plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait shadow-inner flex items-center justify-center overflow-hidden";
+  } else if (isOwnedByMe || isOwnedByOther) {
+    plotStyle = "cursor-not-allowed flex items-center justify-center overflow-hidden font-bold text-[0.45rem] shadow-sm animate-in zoom-in-75 duration-300";
+    overlayStyle = {
+      backgroundColor: `${details.color}80`, 
+      borderColor: details.color,
+      borderWidth: isOwnedByMe ? '2px' : '1px',
+      color: '#ffffff',
+      textShadow: '0px 0px 2px rgba(0,0,0,0.8)'
+    };
+  }
+
+  return (
+    <div
+      onClick={() => onClick(idx)}
+      className={plotStyle}
+      style={overlayStyle}
+      title={`Plot #${idx}`}
+    >
+      {details && !isPending && details.initials}
+    </div>
+  );
+});
 
 export default function OklahomaPlotMap() {
   const router = useRouter();
@@ -34,9 +77,13 @@ export default function OklahomaPlotMap() {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
+  // Ref to hold current user ID for the realtime callback
+  const currentUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     async function loadData() {
       const { plots, currentUserId, userTier: tier, canClaim: _canClaim, myProfile: profile } = await getMapState();
+      currentUserIdRef.current = currentUserId || null;
       
       const newPlotDetails: Record<number, { initials: string, color: string, isMine: boolean }> = {};
       if (plots) {
@@ -62,9 +109,34 @@ export default function OklahomaPlotMap() {
       setLoading(false);
     }
     loadData();
+
+    // Supabase Realtime Sync
+    const channel = supabase.channel('realtime_plots')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'plots' }, async (payload) => {
+        const newPlot = payload.new as { id: number, owner_id: string };
+        if (newPlot.owner_id) {
+          // Fetch the profile for the new owner to get their color/name
+          const { data: profile } = await supabase.from('profiles').select('full_name, color').eq('id', newPlot.owner_id).single();
+          if (profile) {
+            setPlotDetails(prev => ({
+              ...prev,
+              [newPlot.id]: {
+                initials: getInitials(profile.full_name),
+                color: profile.color || '#3B82F6',
+                isMine: newPlot.owner_id === currentUserIdRef.current
+              }
+            }));
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const handlePlotClick = (plotId: number) => {
+  const handlePlotClick = useCallback((plotId: number) => {
     if (plotDetails[plotId] || pendingPlots.includes(plotId)) return;
     
     if (!canClaim) {
@@ -76,7 +148,7 @@ export default function OklahomaPlotMap() {
     setActivePlot(plotId);
     setShowPayment(true);
     setErrorMsg('');
-  };
+  }, [plotDetails, pendingPlots, canClaim]);
 
   const handlePaymentSuccess = async () => {
     if (activePlot === null) return;
@@ -164,9 +236,12 @@ export default function OklahomaPlotMap() {
       >
         <TransformComponent wrapperClass="!w-full !h-full" contentClass="flex items-center justify-center">
           <div className="relative" style={{ width: '1600px', maxWidth: 'none' }}>
-            <img 
+            <Image 
               src="/oklahoma-map-1889.jpg" 
               alt="1889 Oklahoma Indian Territory Map" 
+              width={1600}
+              height={1200}
+              priority={true}
               className="w-full h-auto block opacity-90 shadow-2xl border-4 border-gray-800"
               draggable={false}
             />
@@ -179,41 +254,15 @@ export default function OklahomaPlotMap() {
                 gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)` 
               }}
             >
-              {Array.from({ length: totalPlots }).map((_, idx) => {
-                const isPending = pendingPlots.includes(idx);
-                const details = plotDetails[idx];
-                const isOwnedByMe = details?.isMine;
-                const isOwnedByOther = details && !details.isMine;
-                
-                let plotStyle = "border border-gray-500/20 hover:bg-blue-400/40 hover:border-blue-400 cursor-pointer transition-all duration-150 flex items-center justify-center overflow-hidden";
-                let overlayStyle = {};
-                
-                if (isPending) {
-                  plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait shadow-inner flex items-center justify-center overflow-hidden";
-                } else if (isOwnedByMe || isOwnedByOther) {
-                  plotStyle = "cursor-not-allowed flex items-center justify-center overflow-hidden font-bold text-[0.45rem] shadow-sm";
-                  // Custom styling based on their profile color
-                  overlayStyle = {
-                    backgroundColor: `${details.color}80`, // 80 is 50% opacity hex
-                    borderColor: details.color,
-                    borderWidth: isOwnedByMe ? '2px' : '1px',
-                    color: '#ffffff',
-                    textShadow: '0px 0px 2px rgba(0,0,0,0.8)'
-                  };
-                }
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => handlePlotClick(idx)}
-                    className={plotStyle}
-                    style={overlayStyle}
-                    title={`Plot #${idx}`}
-                  >
-                    {details && !isPending && details.initials}
-                  </div>
-                );
-              })}
+              {Array.from({ length: totalPlots }).map((_, idx) => (
+                <PlotSquare 
+                  key={idx}
+                  idx={idx}
+                  details={plotDetails[idx]}
+                  isPending={pendingPlots.includes(idx)}
+                  onClick={handlePlotClick}
+                />
+              ))}
             </div>
           </div>
         </TransformComponent>

@@ -4,6 +4,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Homestead2 } from "./Homestead";
 import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
+import * as THREE from 'three';
 import { getUserTier } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -101,7 +102,7 @@ export default function Scene() {
       )}
 
       {/* 3D Canvas */}
-      <Canvas gl={{ logarithmicDepthBuffer: true }} shadows dpr={[1, 2]}>
+      <Canvas gl={{ logarithmicDepthBuffer: true }} shadows={{ type: THREE.PCFShadowMap }} dpr={[1, 2]}>
         {/* 1. The Warm Sunrise Background */}
         <color attach="background" args={["#e69e45"]} />
 
