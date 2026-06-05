@@ -79,6 +79,7 @@ export async function getMapState() {
   const { data: plots, error } = await supabase
     .from('plots')
     .select('id, owner_id, profiles(full_name, color)')
+    .not('owner_id', 'is', null)
 
   if (error) {
     console.error("Supabase getMapState error:", error)
