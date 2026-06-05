@@ -99,7 +99,7 @@ export async function getMapState() {
       .eq('plot_claimed', false)
       .limit(1)
     
-    canClaim = visits && visits.length > 0
+    canClaim = !!visits && visits.length > 0
   }
 
   return { plots, currentUserId: user?.id, userTier, canClaim }
