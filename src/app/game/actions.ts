@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, unstable_noStore as noStore } from 'next/cache'
 
 export async function claimPlot(plotId: number) {
   const supabase = await createClient()
@@ -74,10 +74,15 @@ export async function claimPlot(plotId: number) {
 }
 
 export async function getMapState() {
+  noStore()
   const supabase = await createClient()
-  const { data: plots } = await supabase
+  const { data: plots, error } = await supabase
     .from('plots')
     .select('id, owner_id, profiles(full_name, color)')
+
+  if (error) {
+    console.error("Supabase getMapState error:", error)
+  }
   
   const { data: { user } } = await supabase.auth.getUser()
   

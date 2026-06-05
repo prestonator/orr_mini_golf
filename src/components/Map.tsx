@@ -41,10 +41,14 @@ export default function OklahomaPlotMap() {
       const newPlotDetails: Record<number, { initials: string, color: string, isMine: boolean }> = {};
       if (plots) {
         plots.forEach((p: any) => {
-          if (p.owner_id && p.profiles) {
+          if (p.owner_id) {
+            const profileData = p.profiles 
+              ? (Array.isArray(p.profiles) ? p.profiles[0] : p.profiles) 
+              : null;
+              
             newPlotDetails[p.id] = {
-              initials: getInitials(p.profiles.full_name),
-              color: p.profiles.color || '#3B82F6',
+              initials: getInitials(profileData?.full_name || 'Anonymous'),
+              color: profileData?.color || '#3B82F6',
               isMine: p.owner_id === currentUserId
             };
           }
