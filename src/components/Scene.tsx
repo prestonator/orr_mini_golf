@@ -4,6 +4,9 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Homestead2 } from "./Homestead";
 import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
+import { getUserTier } from '@/app/game/actions';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 
 function ResponsiveCamera() {
   const { camera, size } = useThree()
@@ -33,29 +36,47 @@ function ResponsiveCamera() {
 }
 
 export default function Scene() {
+  const router = useRouter();
+  const supabase = createClient();
   const [currentStage, setCurrentStage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const totalStages = 26;
+
+  useEffect(() => {
+    async function load() {
+      const tier = await getUserTier();
+      // Tier 0 -> Stage 1, Tier 1 -> Stage 2, etc. Max 26.
+      setCurrentStage(Math.min(totalStages, tier + 1));
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen bg-[#e69e45] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white/50 border-t-white"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-screen">
       {/* UI Overlay */}
       <div className="absolute top-4 sm:top-10 left-1/2 -translate-x-1/2 z-10 flex flex-wrap gap-2 sm:gap-4 bg-white/80 backdrop-blur-md p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl border border-white/20 items-center justify-center w-[95vw] sm:w-auto max-w-lg">
-        <button 
-          className="px-3 sm:px-6 py-2 sm:py-2.5 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all text-white font-semibold rounded-lg sm:rounded-xl disabled:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed shadow-md shadow-blue-500/20"
-          onClick={() => setCurrentStage(prev => Math.max(1, prev - 1))}
-          disabled={currentStage === 1}
-        >
-          Previous
-        </button>
-        <span className="flex items-center text-sm sm:text-base font-bold text-gray-800 tracking-wide min-w-[100px] sm:min-w-[120px] justify-center">
-          Stage: {currentStage} / {totalStages}
+        <span className="flex items-center text-sm sm:text-base font-bold text-gray-800 tracking-wide px-4 justify-center">
+          Current Tier: {currentStage - 1} / {totalStages - 1}
         </span>
         <button 
-          className="px-3 sm:px-6 py-2 sm:py-2.5 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all text-white font-semibold rounded-lg sm:rounded-xl disabled:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed shadow-md shadow-blue-500/20"
-          onClick={() => setCurrentStage(prev => Math.min(totalStages, prev + 1))}
-          disabled={currentStage === totalStages}
+          onClick={handleLogout}
+          className="px-4 py-2 sm:px-6 sm:py-2.5 text-sm sm:text-base bg-gray-800 hover:bg-gray-900 active:scale-95 transition-all text-white font-semibold rounded-lg sm:rounded-xl shadow-md"
         >
-          Next
+          Done (Log Out)
         </button>
       </div>
 

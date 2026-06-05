@@ -1,75 +1,127 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { getMapState, claimPlot } from '@/app/game/actions';
+import { createClient } from '@/utils/supabase/client';
 
-const OklahomaPlotMap = () => {
+export default function OklahomaPlotMap() {
   const router = useRouter();
+  const supabase = createClient();
 
   // State Management
   const [pendingPlots, setPendingPlots] = useState<number[]>([]);
   const [ownedPlots, setOwnedPlots] = useState<number[]>([]);
+  const [myPlots, setMyPlots] = useState<number[]>([]);
   const [userTier, setUserTier] = useState(0);
+  const [canClaim, setCanClaim] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Modal State
   const [showPayment, setShowPayment] = useState(false);
   const [activePlot, setActivePlot] = useState<number | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // Configuration for the grid over the image. 
-  // You can adjust columns/rows to match the exact density you want.
-  const GRID_COLS = 20; 
-  const GRID_ROWS = 20;
+  // Configuration for 1200 plots
+  const GRID_COLS = 40; 
+  const GRID_ROWS = 30;
   const totalPlots = GRID_COLS * GRID_ROWS;
 
-  // Handle clicking on an empty grid square
+  useEffect(() => {
+    async function loadData() {
+      const { plots, currentUserId, userTier: tier, canClaim: _canClaim } = await getMapState();
+      if (plots) {
+        setOwnedPlots(plots.filter((p: any) => p.owner_id && p.owner_id !== currentUserId).map((p: any) => p.id));
+        setMyPlots(plots.filter((p: any) => p.owner_id === currentUserId).map((p: any) => p.id));
+      }
+      setUserTier(tier);
+      setCanClaim(_canClaim);
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
   const handlePlotClick = (plotId: number) => {
-    // Prevent interacting if already pending or owned
-    if (ownedPlots.includes(plotId) || pendingPlots.includes(plotId)) return;
+    if (ownedPlots.includes(plotId) || myPlots.includes(plotId) || pendingPlots.includes(plotId)) return;
     
-    // Mark as pending and trigger splash screen
+    if (!canClaim) {
+      alert("You have already claimed a plot for this visit. Please check in again to claim another.");
+      return;
+    }
+
     setPendingPlots([...pendingPlots, plotId]);
     setActivePlot(plotId);
     setShowPayment(true);
+    setErrorMsg('');
   };
 
-  // Simulate a successful Square payment
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     if (activePlot === null) return;
+    setClaiming(true);
+    setErrorMsg('');
 
-    // Remove from pending
+    const res = await claimPlot(activePlot);
+    
+    if (res?.error) {
+      setErrorMsg(res.error);
+      setClaiming(false);
+      setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
+      return;
+    }
+
+    // Success! Update local state just in case, before routing
     setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
+    setMyPlots([...myPlots, activePlot]);
+    setUserTier((res as any).newTier);
+    setCanClaim(false);
     
-    // Assign to user & increase tier
-    setOwnedPlots([...ownedPlots, activePlot]);
-    setUserTier(userTier + 1);
-    
-    // Reset modal
     setShowPayment(false);
     setActivePlot(null);
+    setClaiming(false);
 
     // Route to the 3d model
     router.push('/game');
   };
 
-  // Cancel the payment, revert the pending plot
   const handleCancel = () => {
     setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
     setShowPayment(false);
     setActivePlot(null);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-orange-50 select-none">
       
-      {/* Header Info - Floating above the map */}
+      {/* Header Info */}
       <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 bg-white/90 backdrop-blur-md px-6 py-4 rounded-xl shadow-lg w-[calc(100%-2rem)] max-w-4xl flex justify-between items-center border border-white/20">
-        <h1 className="text-2xl font-bold text-gray-800">Oklahoma Land Rush (1889)</h1>
-        <div className="text-lg font-semibold text-blue-600 bg-blue-50 px-4 py-1 rounded-full">
-          User Tier: {userTier}
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Oklahoma Land Rush (1889)</h1>
+        <div className="flex gap-4 items-center">
+          <div className="text-sm sm:text-lg font-semibold text-blue-700 bg-blue-100 px-4 py-1.5 rounded-full shadow-inner">
+            Tier: {userTier}
+          </div>
+          <button 
+            onClick={handleLogout}
+            className="text-sm font-medium bg-gray-800 hover:bg-gray-900 text-white px-4 py-1.5 rounded-full transition-colors shadow-md active:scale-95"
+          >
+            Done (Log Out)
+          </button>
         </div>
       </div>
 
-      {/* Map Container with Zoom & Pan */}
       <TransformWrapper
         initialScale={1}
         minScale={0.5}
@@ -86,7 +138,6 @@ const OklahomaPlotMap = () => {
               draggable={false}
             />
 
-            {/* Clickable Grid Overlay */}
             <div 
               className="absolute top-0 left-0 w-full h-full border-4 border-transparent"
               style={{ 
@@ -97,12 +148,13 @@ const OklahomaPlotMap = () => {
             >
               {Array.from({ length: totalPlots }).map((_, idx) => {
                 const isPending = pendingPlots.includes(idx);
-                const isOwned = ownedPlots.includes(idx);
+                const isOwnedByMe = myPlots.includes(idx);
+                const isOwnedByOther = ownedPlots.includes(idx);
                 
-                // Determine styling based on plot state
-                let plotStyle = "border border-gray-500/30 hover:bg-blue-400/50 hover:border-blue-500 cursor-pointer transition-all duration-150";
-                if (isPending) plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait";
-                if (isOwned) plotStyle = "bg-green-500/70 border-green-700 cursor-not-allowed";
+                let plotStyle = "border border-gray-500/20 hover:bg-blue-400/40 hover:border-blue-400 cursor-pointer transition-all duration-150";
+                if (isPending) plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait shadow-inner";
+                if (isOwnedByMe) plotStyle = "bg-green-500/60 border-green-600 cursor-not-allowed shadow-inner";
+                if (isOwnedByOther) plotStyle = "bg-red-500/60 border-red-600 cursor-not-allowed opacity-50";
 
                 return (
                   <div
@@ -120,11 +172,10 @@ const OklahomaPlotMap = () => {
 
       {/* Splash Screen Payment Modal */}
       {showPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-white/20 transform animate-in zoom-in-95 duration-200">
             
-            {/* Square Logo Placeholder */}
-            <div className="w-16 h-16 bg-gray-900 rounded-lg mx-auto mb-4 flex items-center justify-center">
+            <div className="w-16 h-16 bg-gray-900 rounded-xl mx-auto mb-6 flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-xl">Sq</span>
             </div>
             
@@ -134,24 +185,38 @@ const OklahomaPlotMap = () => {
               Complete your payment to take ownership and increase your tier.
             </p>
 
-            {/* Mock Payment Form */}
-            <div className="bg-gray-50 p-4 rounded mb-6 border border-gray-200 text-left">
-               <div className="mb-2 text-sm text-gray-500">Amount Due</div>
-               <div className="text-3xl font-bold text-gray-800">$50.00</div>
+            {errorMsg && (
+              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="bg-gray-50 p-5 rounded-xl mb-6 border border-gray-100 text-left shadow-inner">
+               <div className="mb-1 text-sm font-medium text-gray-500 uppercase tracking-wider">Amount Due</div>
+               <div className="text-4xl font-extrabold text-gray-800">$50.00</div>
             </div>
 
-            <div className="flex gap-4 justify-center">
+            <div className="flex gap-3 justify-center">
               <button 
                 onClick={handleCancel}
-                className="px-6 py-2 rounded-lg font-semibold text-gray-600 bg-gray-200 hover:bg-gray-300 transition-colors"
+                disabled={claiming}
+                className="flex-1 py-3 rounded-xl font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button 
                 onClick={handlePaymentSuccess}
-                className="px-6 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                disabled={claiming}
+                className="flex-[2] py-3 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2"
               >
-                Pay & Claim Plot
+                {claiming ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Processing...
+                  </>
+                ) : (
+                  'Pay & Claim Plot'
+                )}
               </button>
             </div>
           </div>
@@ -159,6 +224,4 @@ const OklahomaPlotMap = () => {
       )}
     </div>
   );
-};
-
-export default OklahomaPlotMap;
+}

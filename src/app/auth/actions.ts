@@ -12,10 +12,15 @@ export async function login(formData: FormData) {
     password: formData.get('password') as string,
   }
 
-  const { error } = await supabase.auth.signInWithPassword(data)
+  const { data: authData, error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
     redirect('/?error=' + encodeURIComponent(error.message))
+  }
+
+  // Create a new visit record for this login
+  if (authData.user?.id) {
+    await supabase.from('visits').insert({ user_id: authData.user.id })
   }
 
   revalidatePath('/', 'layout')
@@ -36,10 +41,15 @@ export async function signup(formData: FormData) {
     }
   }
 
-  const { error } = await supabase.auth.signUp(data)
+  const { data: authData, error } = await supabase.auth.signUp(data)
 
   if (error) {
     redirect('/?error=' + encodeURIComponent(error.message))
+  }
+
+  // Create a new visit record for this signup
+  if (authData.user?.id) {
+    await supabase.from('visits').insert({ user_id: authData.user.id })
   }
 
   revalidatePath('/', 'layout')
