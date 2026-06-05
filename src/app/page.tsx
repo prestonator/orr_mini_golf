@@ -1,19 +1,10 @@
 import { login, signup, signInWithGoogle } from './auth/actions'
 import Image from 'next/image'
-import { headers } from 'next/headers'
-import { redirect } from 'next/navigation'
-
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>
 }) {
-  const headersList = await headers()
-  const host = headersList.get('host') || ''
-  
-  if (host.includes('localhost') || host.includes('127.0.0.1')) {
-    redirect('/map')
-  }
 
   const resolvedSearchParams = await searchParams
   const errorMessage = resolvedSearchParams?.error

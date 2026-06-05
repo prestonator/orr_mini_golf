@@ -75,7 +75,7 @@ const OklahomaPlotMap = () => {
         minScale={0.5}
         maxScale={8}
         centerOnInit={true}
-        wheel={{ step: 0.1 }}
+        wheel={{ step: 0.001 }}
       >
         <TransformComponent wrapperClass="!w-full !h-full" contentClass="flex items-center justify-center">
           <div className="relative" style={{ width: '1600px', maxWidth: 'none' }}>
