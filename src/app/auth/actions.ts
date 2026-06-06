@@ -23,7 +23,7 @@ function getAuthDetails(formData: FormData) {
     return { error: 'PIN must be exactly 4 digits' }
   }
   
-  const email = identity.includes('@') ? identity : `${identity.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@orrgolf.local`
+  const email = identity.includes('@') ? identity : `${identity.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@kiosk.orrgolf.com`
   const password = pin + '00'
   
   return { email, password, identity }
