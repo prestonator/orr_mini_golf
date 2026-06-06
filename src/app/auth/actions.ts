@@ -4,76 +4,71 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 
-export async function login(formData: FormData) {
+export async function sendOtp(formData: FormData) {
   const supabase = await createClient()
-
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
-
-  const { data: authData, error } = await supabase.auth.signInWithPassword(data)
-
-  if (error) {
-    redirect('/?error=' + encodeURIComponent(error.message))
-  }
-
-  // Create a new visit record for this login
-  if (authData.user?.id) {
-    await supabase.rpc('create_visit_for_user', { target_user_id: authData.user.id })
-  }
-
-  revalidatePath('/', 'layout')
-  redirect('/map')
-}
-
-export async function signup(formData: FormData) {
-  const supabase = await createClient()
-
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-    options: {
-      data: {
-        full_name: formData.get('fullName') as string,
-        phone_number: formData.get('phoneNumber') as string,
-      }
-    }
-  }
-
-  const { data: authData, error } = await supabase.auth.signUp(data)
-
-  if (error) {
-    redirect('/?error=' + encodeURIComponent(error.message))
-  }
-
-  // Create a new visit record for this signup
-  if (authData.user?.id) {
-    await supabase.rpc('create_visit_for_user', { target_user_id: authData.user.id })
-  }
-
-  revalidatePath('/', 'layout')
-  redirect('/map')
-}
-
-export async function signInWithGoogle() {
-  const supabase = await createClient()
+  const email = formData.get('email') as string
   
-  // NOTE: When using SSR, redirectTo is required to know where to go back after OAuth
-  // This route shouldn't return a redirect immediately if the OAuth flow uses a URL, 
-  // we redirect manually by using the 'data.url' from supabase.auth.signInWithOAuth.
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`,
-    },
-  })
+  if (!email) {
+    return { error: 'Email is required' }
+  }
 
+  const { error } = await supabase.auth.signInWithOtp({ email })
+  
   if (error) {
-    redirect('/?error=' + encodeURIComponent(error.message))
+    return { error: error.message }
+  }
+  
+  return { success: true }
+}
+
+export async function verifyOtp(formData: FormData) {
+  const supabase = await createClient()
+  const email = formData.get('email') as string
+  const otp = formData.get('otp') as string
+  
+  if (!email || !otp) {
+    return { error: 'Email and OTP are required' }
   }
 
-  if (data.url) {
-    redirect(data.url)
+  const { data, error } = await supabase.auth.verifyOtp({ 
+    email, 
+    token: otp, 
+    type: 'email' 
+  })
+  
+  if (error) {
+    return { error: error.message }
   }
+  
+  if (data.user?.id) {
+    await supabase.rpc('create_visit_for_user', { target_user_id: data.user.id })
+  }
+  
+  const fullName = data.user?.user_metadata?.full_name
+  if (!fullName) {
+    return { requiresName: true }
+  }
+  
+  revalidatePath('/', 'layout')
+  redirect('/map')
+}
+
+export async function updateProfile(formData: FormData) {
+  const supabase = await createClient()
+  const fullName = formData.get('fullName') as string
+  
+  if (!fullName) {
+    return { error: 'Full name is required' }
+  }
+
+  const { error } = await supabase.auth.updateUser({ 
+    data: { full_name: fullName } 
+  })
+  
+  if (error) {
+    return { error: error.message }
+  }
+  
+  revalidatePath('/', 'layout')
+  redirect('/map')
 }
