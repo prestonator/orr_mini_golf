@@ -1,47 +1,91 @@
 'use client'
 
-import { useState } from 'react'
-import { sendOtp, verifyOtp, updateProfile } from '@/app/auth/actions'
+import { useState, useEffect } from 'react'
+import { signInWithPin, signUpWithPin } from '@/app/auth/actions'
 
 export function AuthForm({ errorMessage }: { errorMessage?: string }) {
-  const [view, setView] = useState<'email' | 'otp' | 'profile'>('email')
-  const [email, setEmail] = useState('')
+  const [step, setStep] = useState<1 | 2>(1)
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [identity, setIdentity] = useState('')
+  const [pin, setPin] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [clearedGlobalError, setClearedGlobalError] = useState(false)
   
-  const displayError = localError || errorMessage
+  const displayError = localError || (!clearedGlobalError ? errorMessage : null)
 
-  async function handleSendOtp(formData: FormData) {
+  useEffect(() => {
+    if (step !== 2) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isSubmitting) return;
+      if (e.key >= '0' && e.key <= '9') {
+        if (pin.length < 4) {
+          setPin(prev => prev + e.key)
+        }
+      } else if (e.key === 'Backspace') {
+        setPin(prev => prev.slice(0, -1))
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [step, pin.length, isSubmitting]);
+
+  const handleNext = (e: React.FormEvent) => {
+    e.preventDefault()
+    setClearedGlobalError(true)
+    if (!identity.trim()) {
+      setLocalError('Please enter a name or email')
+      return
+    }
     setLocalError(null)
-    const emailVal = formData.get('email') as string
-    if (!emailVal) return
-    
-    setEmail(emailVal)
-    const res = await sendOtp(formData)
-    
-    if (res?.error) {
-      setLocalError(res.error)
-    } else if (res?.success) {
-      setView('otp')
+    setStep(2)
+  }
+
+  const handlePinDigit = (digit: string) => {
+    setClearedGlobalError(true)
+    if (pin.length < 4) {
+      setPin(prev => prev + digit)
     }
   }
 
-  async function handleVerifyOtp(formData: FormData) {
-    setLocalError(null)
-    const res = await verifyOtp(formData)
-    
-    if (res?.error) {
-      setLocalError(res.error)
-    } else if (res?.requiresName) {
-      setView('profile')
-    }
+  const handleDelete = () => {
+    setClearedGlobalError(true)
+    setPin(prev => prev.slice(0, -1))
   }
 
-  async function handleUpdateProfile(formData: FormData) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setClearedGlobalError(true)
+    if (pin.length !== 4) {
+      setLocalError('PIN must be 4 digits')
+      return
+    }
     setLocalError(null)
-    const res = await updateProfile(formData)
+    setIsSubmitting(true)
     
-    if (res?.error) {
-      setLocalError(res.error)
+    const formData = new FormData()
+    formData.append('identity', identity)
+    formData.append('pin', pin)
+
+    try {
+      let res;
+      if (mode === 'signin') {
+        res = await signInWithPin(formData)
+      } else {
+        res = await signUpWithPin(formData)
+      }
+
+      if (res?.error) {
+        setLocalError(res.error)
+        setPin('')
+      }
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : 'An unexpected error occurred')
+      setPin('')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -52,9 +96,7 @@ export function AuthForm({ errorMessage }: { errorMessage?: string }) {
           Welcome to OrrGolf
         </h1>
         <p className="text-lg text-neutral-400">
-          {view === 'email' ? 'Enter your email to claim your plot' : 
-           view === 'otp' ? 'Enter the code sent to your email' : 
-           'Complete your profile'}
+          {step === 1 ? 'Enter your name or email' : 'Enter your 4-digit PIN'}
         </p>
       </div>
 
@@ -64,84 +106,121 @@ export function AuthForm({ errorMessage }: { errorMessage?: string }) {
         </div>
       )}
 
-      {view === 'email' && (
-        <form action={handleSendOtp} className="space-y-6 flex flex-col group animate-in fade-in zoom-in-95 duration-200">
+      {step === 1 && (
+        <form onSubmit={handleNext} className="space-y-6 flex flex-col group animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex bg-neutral-900 rounded-xl p-1 mb-2 border border-white/5">
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => setMode('signin')}
+              className={`flex-1 py-3 text-sm font-medium rounded-lg transition-all ${
+                mode === 'signin' 
+                  ? 'bg-neutral-800 text-white shadow-sm' 
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-3 text-sm font-medium rounded-lg transition-all ${
+                mode === 'signup' 
+                  ? 'bg-neutral-800 text-white shadow-sm' 
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
           <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-300 ml-1" htmlFor="email">Email Address</label>
+            <label className="text-sm font-medium text-neutral-300 ml-1" htmlFor="identity">Name or Email</label>
             <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="you@example.com"
+              id="identity"
+              type="text"
+              value={identity}
+              onChange={(e) => setIdentity(e.target.value)}
+              placeholder="e.g. John Doe or john@example.com"
               required
-              className="w-full bg-neutral-950/50 border border-white/10 rounded-xl px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600"
+              disabled={isSubmitting}
+              className="w-full bg-neutral-950/50 border border-white/10 rounded-xl px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600 disabled:opacity-50"
             />
           </div>
           
           <button
             type="submit"
-            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
+            disabled={isSubmitting}
+            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
           >
-            Send Login Code
+            Continue
           </button>
         </form>
       )}
 
-      {view === 'otp' && (
-        <form action={handleVerifyOtp} className="space-y-6 flex flex-col group animate-in fade-in zoom-in-95 duration-200">
-          <input type="hidden" name="email" value={email} />
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-300 ml-1" htmlFor="otp">One-Time Password</label>
-            <input
-              id="otp"
-              name="otp"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoComplete="one-time-code"
-              placeholder="000000"
-              required
-              className="w-full bg-neutral-950/50 border border-white/10 rounded-xl px-4 py-4 text-2xl tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600"
-            />
+      {step === 2 && (
+        <form onSubmit={handleSubmit} className="space-y-6 flex flex-col group animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex justify-center mb-6 gap-4">
+            {[0, 1, 2, 3].map(i => (
+              <div 
+                key={i} 
+                className={`w-14 h-16 rounded-xl flex items-center justify-center text-3xl font-bold border ${
+                  pin.length > i ? 'bg-indigo-500/20 border-indigo-500/50 text-white' : 'bg-neutral-950/50 border-white/10 text-neutral-600'
+                } transition-all`}
+              >
+                {pin.length > i ? '•' : ''}
+              </div>
+            ))}
           </div>
-          
-          <div className="pt-2 flex gap-3">
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(digit => (
+              <button
+                key={digit}
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handlePinDigit(digit)}
+                className="bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white font-medium rounded-xl py-6 text-2xl transition-colors border border-white/5 active:bg-neutral-700 active:scale-[0.98]"
+              >
+                {digit}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={() => setView('email')}
-              className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors border border-white/5 focus:ring-2 focus:ring-neutral-500/50 focus:outline-none active:scale-[0.98]"
+              disabled={isSubmitting}
+              onClick={() => {
+                setStep(1);
+                setPin('');
+              }}
+              className="bg-neutral-900/50 hover:bg-neutral-800 disabled:opacity-50 text-neutral-400 font-medium rounded-xl py-6 text-sm transition-colors border border-transparent active:scale-[0.98]"
             >
               Back
             </button>
             <button
-              type="submit"
-              className="flex-[2] bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => handlePinDigit('0')}
+              className="bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white font-medium rounded-xl py-6 text-2xl transition-colors border border-white/5 active:bg-neutral-700 active:scale-[0.98]"
             >
-              Verify Code
+              0
             </button>
-          </div>
-        </form>
-      )}
-
-      {view === 'profile' && (
-        <form action={handleUpdateProfile} className="space-y-6 flex flex-col group animate-in fade-in zoom-in-95 duration-200">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-300 ml-1" htmlFor="fullName">Full Name</label>
-            <input
-              id="fullName"
-              name="fullName"
-              type="text"
-              placeholder="John Doe"
-              required
-              className="w-full bg-neutral-950/50 border border-white/10 rounded-xl px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600"
-            />
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleDelete}
+              className="bg-neutral-900/50 hover:bg-neutral-800 disabled:opacity-50 text-neutral-400 font-medium rounded-xl py-6 text-sm transition-colors border border-transparent active:scale-[0.98]"
+            >
+              Del
+            </button>
           </div>
           
           <button
             type="submit"
-            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
+            disabled={pin.length !== 4 || isSubmitting}
+            className="w-full bg-indigo-500 disabled:bg-neutral-800 disabled:text-neutral-500 hover:bg-indigo-600 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
           >
-            Complete Profile
+            {mode === 'signin' ? 'Sign In' : 'Sign Up'}
           </button>
         </form>
       )}
