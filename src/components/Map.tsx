@@ -7,6 +7,15 @@ import { getMapState, claimPlot } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
 import { signOut } from '@/app/auth/actions';
 
+type LeaderboardEntry = {
+  owner_id: string;
+  username: string;
+  initials: string;
+  color: string;
+  tier: number;
+  stage: number;
+};
+
 const PlotSquare = memo(({ 
   idx, 
   details, 
@@ -60,9 +69,11 @@ export default function OklahomaPlotMap() {
   const [myProfile, setMyProfile] = useState<{ username: string, color: string } | null>(null);
   const [canClaim, setCanClaim] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
   
   // Modal State
-  const [showPayment, setShowPayment] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
   const [activePlot, setActivePlot] = useState<number | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -80,6 +91,7 @@ export default function OklahomaPlotMap() {
 
   // Ref to hold current user ID for the realtime callback
   const currentUserIdRef = useRef<string | null>(null);
+  const processedPlotsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     async function loadData() {
@@ -87,6 +99,8 @@ export default function OklahomaPlotMap() {
       currentUserIdRef.current = currentUserId || null;
       
       const newPlotDetails: Record<number, { initials: string, color: string, isMine: boolean }> = {};
+      const ownerCounts: Record<string, { tier: number, username: string, color: string }> = {};
+
       if (plots) {
         plots.forEach((p: any) => {
           if (p.owner_id) {
@@ -94,15 +108,34 @@ export default function OklahomaPlotMap() {
               ? (Array.isArray(p.profiles) ? p.profiles[0] : p.profiles) 
               : null;
               
+            const username = profileData?.username || 'Anonymous';
+            const color = profileData?.color || '#3B82F6';
+
             newPlotDetails[p.id] = {
-              initials: getInitials(profileData?.username || 'Anonymous'),
-              color: profileData?.color || '#3B82F6',
+              initials: getInitials(username),
+              color: color,
               isMine: p.owner_id === currentUserId
             };
+
+            if (!ownerCounts[p.owner_id]) {
+              ownerCounts[p.owner_id] = { tier: 0, username, color };
+            }
+            ownerCounts[p.owner_id].tier++;
           }
         });
       }
       
+      const initialLeaderboard: LeaderboardEntry[] = Object.entries(ownerCounts).map(([owner_id, data]) => ({
+        owner_id,
+        username: data.username,
+        initials: getInitials(data.username),
+        color: data.color,
+        tier: data.tier,
+        stage: Math.min(26, data.tier + 1)
+      }));
+      initialLeaderboard.sort((a, b) => b.tier - a.tier);
+      setLeaderboard(initialLeaderboard);
+
       setPlotDetails(newPlotDetails);
       setMyProfile(profile);
       setUserTier(tier);
@@ -116,18 +149,48 @@ export default function OklahomaPlotMap() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'plots' }, async (payload) => {
         const newPlot = payload.new as { id: number, owner_id: string };
         if (newPlot.owner_id) {
+          if (processedPlotsRef.current.has(newPlot.id)) return;
+          processedPlotsRef.current.add(newPlot.id);
+
           // Fetch the profile for the new owner to get their color/name
           const { data: profile } = await supabase.from('profiles').select('username, color').eq('id', newPlot.owner_id).single();
-          if (profile) {
-            setPlotDetails(prev => ({
-              ...prev,
-              [newPlot.id]: {
-                initials: getInitials(profile.username),
-                color: profile.color || '#3B82F6',
-                isMine: newPlot.owner_id === currentUserIdRef.current
-              }
-            }));
-          }
+          
+          const username = profile?.username || 'Anonymous';
+          const color = profile?.color || '#3B82F6';
+          const initials = getInitials(username);
+
+          setPlotDetails(prev => ({
+            ...prev,
+            [newPlot.id]: {
+              initials: initials,
+              color: color,
+              isMine: newPlot.owner_id === currentUserIdRef.current
+            }
+          }));
+
+          setLeaderboard(prev => {
+            const existingIndex = prev.findIndex(entry => entry.owner_id === newPlot.owner_id);
+            let nextLeaderboard = [...prev];
+            if (existingIndex >= 0) {
+              const entry = nextLeaderboard[existingIndex];
+              const newTier = entry.tier + 1;
+              nextLeaderboard[existingIndex] = {
+                ...entry,
+                tier: newTier,
+                stage: Math.min(26, newTier + 1)
+              };
+            } else {
+              nextLeaderboard.push({
+                owner_id: newPlot.owner_id,
+                username: username,
+                initials: initials,
+                color: color,
+                tier: 1,
+                stage: 2
+              });
+            }
+            return nextLeaderboard.sort((a, b) => b.tier - a.tier);
+          });
         }
       })
       .subscribe();
@@ -147,11 +210,11 @@ export default function OklahomaPlotMap() {
 
     setPendingPlots([...pendingPlots, plotId]);
     setActivePlot(plotId);
-    setShowPayment(true);
+    setShowClaimModal(true);
     setErrorMsg('');
   }, [plotDetails, pendingPlots, canClaim]);
 
-  const handlePaymentSuccess = async () => {
+  const handleClaimConfirm = async () => {
     if (activePlot === null) return;
     setClaiming(true);
     setErrorMsg('');
@@ -167,22 +230,54 @@ export default function OklahomaPlotMap() {
 
     // Success! Update local state just in case, before routing
     setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
+    processedPlotsRef.current.add(activePlot);
     
+    const nextTier = (res as any).newTier;
+
     if (myProfile) {
+      const initials = getInitials(myProfile.username);
+      const color = myProfile.color || '#3B82F6';
+
       setPlotDetails(prev => ({
         ...prev,
-        [activePlot]: {
-          initials: getInitials(myProfile.username),
-          color: myProfile.color || '#3B82F6',
+        [activePlot as number]: {
+          initials: initials,
+          color: color,
           isMine: true
         }
       }));
+
+      setLeaderboard(prev => {
+        const myUserId = currentUserIdRef.current;
+        if (!myUserId) return prev;
+        
+        const existingIndex = prev.findIndex(entry => entry.owner_id === myUserId);
+        let nextLeaderboard = [...prev];
+        if (existingIndex >= 0) {
+          const entry = nextLeaderboard[existingIndex];
+          nextLeaderboard[existingIndex] = {
+            ...entry,
+            tier: nextTier,
+            stage: Math.min(26, nextTier + 1)
+          };
+        } else {
+          nextLeaderboard.push({
+            owner_id: myUserId,
+            username: myProfile.username,
+            initials: initials,
+            color: color,
+            tier: nextTier,
+            stage: Math.min(26, nextTier + 1)
+          });
+        }
+        return nextLeaderboard.sort((a, b) => b.tier - a.tier);
+      });
     }
     
-    setUserTier((res as any).newTier);
+    setUserTier(nextTier);
     setCanClaim(false);
     
-    setShowPayment(false);
+    setShowClaimModal(false);
     setActivePlot(null);
     setClaiming(false);
 
@@ -192,7 +287,7 @@ export default function OklahomaPlotMap() {
 
   const handleCancel = () => {
     setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
-    setShowPayment(false);
+    setShowClaimModal(false);
     setActivePlot(null);
   };
 
@@ -225,6 +320,30 @@ export default function OklahomaPlotMap() {
             Done (Log Out)
           </button>
         </div>
+      </div>
+
+      {/* Leaderboard Panel */}
+      <div className="absolute right-6 top-32 z-10 bg-white/90 backdrop-blur-md px-4 py-4 rounded-xl shadow-lg w-64 border border-white/20 max-h-[60vh] overflow-y-auto flex flex-col gap-3 pointer-events-auto">
+        <h2 className="text-lg font-bold text-gray-800 tracking-tight border-b pb-2">Leaderboard</h2>
+        {leaderboard.length === 0 ? (
+          <div className="text-sm text-gray-500 italic">No plots claimed yet.</div>
+        ) : (
+          leaderboard.map((entry, idx) => (
+            <div key={entry.owner_id} className="flex items-center gap-3">
+              <div className="text-sm font-bold text-gray-400 w-4">{idx + 1}.</div>
+              <div 
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm"
+                style={{ backgroundColor: entry.color }}
+              >
+                {entry.initials}
+              </div>
+              <div className="flex flex-col flex-1 min-w-0">
+                <div className="text-sm font-bold text-gray-800 truncate">{entry.username}</div>
+                <div className="text-xs text-gray-500">Stage {entry.stage} / 26</div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       <TransformWrapper
@@ -268,19 +387,15 @@ export default function OklahomaPlotMap() {
         </TransformComponent>
       </TransformWrapper>
 
-      {/* Splash Screen Payment Modal */}
-      {showPayment && (
+      {/* Splash Screen Claim Modal */}
+      {showClaimModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-white/20 transform animate-in zoom-in-95 duration-200">
             
-            <div className="w-16 h-16 bg-gray-900 rounded-xl mx-auto mb-6 flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-xl">Sq</span>
-            </div>
-            
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Secure Payment</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Confirm Claim</h2>
             <p className="text-gray-600 mb-6">
-              You are claiming <strong>Plot #{activePlot}</strong>. <br />
-              Complete your payment to take ownership and increase your tier.
+              You are about to claim <strong>Plot #{activePlot}</strong>. <br /> 
+              Confirm your claim to take ownership and increase your tier.
             </p>
 
             {errorMsg && (
@@ -288,11 +403,6 @@ export default function OklahomaPlotMap() {
                 {errorMsg}
               </div>
             )}
-
-            <div className="bg-gray-50 p-5 rounded-xl mb-6 border border-gray-100 text-left shadow-inner">
-               <div className="mb-1 text-sm font-medium text-gray-500 uppercase tracking-wider">Amount Due</div>
-               <div className="text-4xl font-extrabold text-gray-800">$50.00</div>
-            </div>
 
             <div className="flex gap-3 justify-center">
               <button 
@@ -303,7 +413,7 @@ export default function OklahomaPlotMap() {
                 Cancel
               </button>
               <button 
-                onClick={handlePaymentSuccess}
+                onClick={handleClaimConfirm}
                 disabled={claiming}
                 className="flex-[2] py-3 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2"
               >
@@ -313,7 +423,7 @@ export default function OklahomaPlotMap() {
                     Processing...
                   </>
                 ) : (
-                  'Pay & Claim Plot'
+                  'Claim Plot'
                 )}
               </button>
             </div>
