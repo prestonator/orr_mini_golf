@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { signOut } from '@/app/auth/actions';
 
 export default function InactivityTimer() {
   const router = useRouter();
@@ -17,10 +17,7 @@ export default function InactivityTimer() {
     const resetTimer = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        router.push('/?error=' + encodeURIComponent('Logged out due to inactivity'));
-        router.refresh();
+        await signOut('Logged out due to inactivity');
       }, 90000); // 90 seconds
     };
 

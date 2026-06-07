@@ -2,13 +2,22 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache'
+import { cookies } from 'next/headers'
+import { verifySessionToken } from '@/utils/auth'
+
+async function getUserId() {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('orrgolf_auth')?.value
+  const payload = token ? await verifySessionToken(token) : null
+  return payload?.sub as string | undefined
+}
 
 export async function claimPlot(plotId: number) {
   const supabase = await createClient()
 
   // 1. Get current user
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const userId = await getUserId()
+  if (!userId) {
     return { error: 'Not authenticated' }
   }
 
@@ -16,7 +25,7 @@ export async function claimPlot(plotId: number) {
   const { data: visits } = await supabase
     .from('visits')
     .select('id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('plot_claimed', false)
     .order('visit_date', { ascending: false })
     .limit(1)
@@ -41,7 +50,7 @@ export async function claimPlot(plotId: number) {
   // 4. Claim the plot
   const { error: plotError } = await supabase
     .from('plots')
-    .update({ owner_id: user.id, visit_id: visitId, claimed_at: new Date().toISOString() })
+    .update({ owner_id: userId, visit_id: visitId, claimed_at: new Date().toISOString() })
     .eq('id', plotId)
 
   if (plotError) {
@@ -58,14 +67,14 @@ export async function claimPlot(plotId: number) {
   const { data: profile } = await supabase
     .from('profiles')
     .select('tier')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single()
 
   const currentTier = profile?.tier || 0
   await supabase
     .from('profiles')
     .update({ tier: currentTier + 1 })
-    .eq('id', user.id)
+    .eq('id', userId)
 
   revalidatePath('/map')
   revalidatePath('/game')
@@ -85,46 +94,45 @@ export async function getMapState() {
     console.error("Supabase getMapState error:", error)
   }
   
-  const { data: { user } } = await supabase.auth.getUser()
+  const userId = await getUserId()
   
   let userTier = 0
   let canClaim = false
   let myProfile = null
 
-  if (user) {
+  if (userId) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('tier, full_name, color')
-      .eq('id', user.id)
+      .select('tier, username, color')
+      .eq('id', userId)
       .single()
     if (profile) {
       userTier = profile.tier
-      myProfile = profile
+      myProfile = { ...profile, full_name: profile.username }
     }
 
     const { data: visits } = await supabase
       .from('visits')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('plot_claimed', false)
       .limit(1)
     
     canClaim = !!visits && visits.length > 0
   }
 
-  return { plots, currentUserId: user?.id, userTier, canClaim, myProfile }
+  return { plots, currentUserId: userId, userTier, canClaim, myProfile }
 }
 
 export async function getUserTier() {
+  const userId = await getUserId()
+  if (!userId) return 0
+  
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) return 0
-  
   const { data: profile } = await supabase
     .from('profiles')
     .select('tier')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single()
     
   return profile?.tier || 0

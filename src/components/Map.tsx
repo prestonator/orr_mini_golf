@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { getMapState, claimPlot } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
+import { signOut } from '@/app/auth/actions';
 
 const PlotSquare = memo(({ 
   idx, 
@@ -196,8 +197,7 @@ export default function OklahomaPlotMap() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+    await signOut();
   };
 
   if (loading) {

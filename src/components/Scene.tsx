@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { getUserTier } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import { signOut } from '@/app/auth/actions';
 
 function ResponsiveCamera() {
   const { camera, size } = useThree()
@@ -54,8 +55,7 @@ export default function Scene() {
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+    await signOut();
   };
 
   if (loading) {
