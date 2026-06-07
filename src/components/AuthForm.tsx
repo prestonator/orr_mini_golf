@@ -3,7 +3,13 @@
 import { useState, useEffect } from 'react'
 import { signInWithPin, signUpWithPin } from '@/app/auth/actions'
 
-export function AuthForm({ errorMessage }: { errorMessage?: string }) {
+export function AuthForm({ 
+  errorMessage, 
+  players = [] 
+}: { 
+  errorMessage?: string; 
+  players?: { id: string; username: string }[] 
+}) {
   const [step, setStep] = useState<1 | 2>(1)
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [identity, setIdentity] = useState('')
@@ -135,27 +141,49 @@ export function AuthForm({ errorMessage }: { errorMessage?: string }) {
             </button>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-300 ml-1" htmlFor="identity">Name or Email</label>
-            <input
-              id="identity"
-              type="text"
-              value={identity}
-              onChange={(e) => setIdentity(e.target.value)}
-              placeholder="e.g. John Doe or john@example.com"
-              required
-              disabled={isSubmitting}
-              className="w-full bg-neutral-950/50 border border-white/10 rounded-xl px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600 disabled:opacity-50"
-            />
-          </div>
-          
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
-          >
-            Continue
-          </button>
+          {mode === 'signup' ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-300 ml-1" htmlFor="identity">Name or Email</label>
+                <input
+                  id="identity"
+                  type="text"
+                  value={identity}
+                  onChange={(e) => setIdentity(e.target.value)}
+                  placeholder="e.g. John Doe or john@example.com"
+                  required
+                  disabled={isSubmitting}
+                  className="w-full bg-neutral-950/50 border border-white/10 rounded-xl px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600 disabled:opacity-50"
+                />
+              </div>
+              
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-medium rounded-xl px-4 py-4 text-lg transition-colors focus:ring-2 focus:ring-indigo-500/50 focus:outline-none active:scale-[0.98]"
+              >
+                Continue
+              </button>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto">
+              {players.map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  onClick={() => {
+                    setClearedGlobalError(true)
+                    setLocalError(null)
+                    setIdentity(player.username)
+                    setStep(2)
+                  }}
+                  className="bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 text-white p-4 rounded-xl text-left transition-colors"
+                >
+                  <div className="font-medium truncate">{player.username}</div>
+                </button>
+              ))}
+            </div>
+          )}
         </form>
       )}
 
