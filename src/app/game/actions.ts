@@ -63,23 +63,18 @@ export async function claimPlot(plotId: number) {
     .update({ plot_claimed: true })
     .eq('id', visitId)
 
-  // 6. Increment user tier in profiles
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tier')
-    .eq('id', userId)
-    .single()
+  // Calculate new tier based on total plots owned
+  const { count } = await supabase
+    .from('plots')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', userId)
 
-  const currentTier = profile?.tier || 0
-  await supabase
-    .from('profiles')
-    .update({ tier: currentTier + 1 })
-    .eq('id', userId)
+  const newTier = count || 1;
 
   revalidatePath('/map')
   revalidatePath('/game')
   
-  return { success: true, newTier: currentTier + 1 }
+  return { success: true, newTier }
 }
 
 export async function getMapState() {
@@ -103,12 +98,17 @@ export async function getMapState() {
   if (userId) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('tier, username, color')
+      .select('username, color')
       .eq('id', userId)
       .single()
+      
     if (profile) {
-      userTier = profile.tier
       myProfile = { ...profile, full_name: profile.username }
+    }
+
+    // Calculate userTier from the fetched plots
+    if (plots) {
+      userTier = plots.filter(p => p.owner_id === userId).length
     }
 
     const { data: visits } = await supabase
@@ -129,11 +129,10 @@ export async function getUserTier() {
   if (!userId) return 0
   
   const supabase = await createClient()
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tier')
-    .eq('id', userId)
-    .single()
+  const { count } = await supabase
+    .from('plots')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', userId)
     
-  return profile?.tier || 0
+  return count || 0
 }
