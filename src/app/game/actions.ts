@@ -81,7 +81,7 @@ export async function getMapState() {
   const supabase = await createClient()
   const { data: plots, error } = await supabase
     .from('plots')
-    .select('id, owner_id, profiles(full_name, color)')
+    .select('id, owner_id, profiles(username, color)')
     .not('owner_id', 'is', null)
 
   if (error) {

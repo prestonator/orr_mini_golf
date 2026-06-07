@@ -57,7 +57,7 @@ export default function OklahomaPlotMap() {
   const [pendingPlots, setPendingPlots] = useState<number[]>([]);
   const [plotDetails, setPlotDetails] = useState<Record<number, { initials: string, color: string, isMine: boolean }>>({});
   const [userTier, setUserTier] = useState(0);
-  const [myProfile, setMyProfile] = useState<{ full_name: string, color: string } | null>(null);
+  const [myProfile, setMyProfile] = useState<{ username: string, color: string } | null>(null);
   const [canClaim, setCanClaim] = useState(false);
   const [loading, setLoading] = useState(true);
   
@@ -95,7 +95,7 @@ export default function OklahomaPlotMap() {
               : null;
               
             newPlotDetails[p.id] = {
-              initials: getInitials(profileData?.full_name || 'Anonymous'),
+              initials: getInitials(profileData?.username || 'Anonymous'),
               color: profileData?.color || '#3B82F6',
               isMine: p.owner_id === currentUserId
             };
@@ -117,12 +117,12 @@ export default function OklahomaPlotMap() {
         const newPlot = payload.new as { id: number, owner_id: string };
         if (newPlot.owner_id) {
           // Fetch the profile for the new owner to get their color/name
-          const { data: profile } = await supabase.from('profiles').select('full_name, color').eq('id', newPlot.owner_id).single();
+          const { data: profile } = await supabase.from('profiles').select('username, color').eq('id', newPlot.owner_id).single();
           if (profile) {
             setPlotDetails(prev => ({
               ...prev,
               [newPlot.id]: {
-                initials: getInitials(profile.full_name),
+                initials: getInitials(profile.username),
                 color: profile.color || '#3B82F6',
                 isMine: newPlot.owner_id === currentUserIdRef.current
               }
@@ -172,7 +172,7 @@ export default function OklahomaPlotMap() {
       setPlotDetails(prev => ({
         ...prev,
         [activePlot]: {
-          initials: getInitials(myProfile.full_name),
+          initials: getInitials(myProfile.username),
           color: myProfile.color || '#3B82F6',
           isMine: true
         }
