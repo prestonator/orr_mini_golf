@@ -47,11 +47,10 @@ export async function claimPlot(plotId: number) {
     return { error: 'Plot is already claimed by someone else.' }
   }
 
-  // 4. Claim the plot
+  // 4. Claim the plot (use upsert because row might not exist yet)
   const { error: plotError } = await supabase
     .from('plots')
-    .update({ owner_id: userId, visit_id: visitId, claimed_at: new Date().toISOString() })
-    .eq('id', plotId)
+    .upsert({ id: plotId, owner_id: userId, visit_id: visitId, claimed_at: new Date().toISOString() })
 
   if (plotError) {
     return { error: 'Failed to claim plot.' }
