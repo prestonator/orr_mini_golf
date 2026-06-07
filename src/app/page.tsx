@@ -17,12 +17,11 @@ export default async function LoginPage({
     .order('username', { ascending: true })
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 selection:bg-indigo-500/30 relative overflow-hidden">
+    <div className="min-h-screen bg-[#d9c5a0] flex items-center justify-center p-4 relative overflow-hidden font-sans">
       {/* Decorative background elements */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] mix-blend-multiply pointer-events-none" />
 
-      <div className="w-full max-w-md bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10">
+      <div className="relative w-full max-w-md bg-[#f4ecd8] border-[6px] border-double border-[#5c3a21] shadow-2xl rounded-sm p-6 sm:p-8 z-10">
         <AuthForm errorMessage={errorMessage} players={players || []} />
       </div>
     </div>
