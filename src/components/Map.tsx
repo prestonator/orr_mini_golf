@@ -1,11 +1,12 @@
 "use client";
-import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { getMapState, claimPlot } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
 import { signOut } from '@/app/auth/actions';
+import { getDeterministicColor } from '@/utils/colors';
 
 type LeaderboardEntry = {
   owner_id: string;
@@ -57,10 +58,11 @@ const PlotSquare = memo(({
     </div>
   );
 });
+PlotSquare.displayName = 'PlotSquare';
 
 export default function OklahomaPlotMap() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   // State Management
   const [pendingPlots, setPendingPlots] = useState<number[]>([]);
@@ -102,14 +104,14 @@ export default function OklahomaPlotMap() {
       const ownerCounts: Record<string, { tier: number, username: string, color: string }> = {};
 
       if (plots) {
-        plots.forEach((p: any) => {
+        plots.forEach((p: { id: number, owner_id: string, profiles: { username: string } | { username: string }[] | null }) => {
           if (p.owner_id) {
             const profileData = p.profiles 
               ? (Array.isArray(p.profiles) ? p.profiles[0] : p.profiles) 
               : null;
               
             const username = profileData?.username || 'Anonymous';
-            const color = profileData?.color || '#3B82F6';
+            const color = getDeterministicColor(p.owner_id);
 
             newPlotDetails[p.id] = {
               initials: getInitials(username),
@@ -156,7 +158,7 @@ export default function OklahomaPlotMap() {
           const { data: profile } = await supabase.from('profiles').select('username, color').eq('id', newPlot.owner_id).single();
           
           const username = profile?.username || 'Anonymous';
-          const color = profile?.color || '#3B82F6';
+          const color = getDeterministicColor(newPlot.owner_id);
           const initials = getInitials(username);
 
           setPlotDetails(prev => ({
@@ -170,7 +172,7 @@ export default function OklahomaPlotMap() {
 
           setLeaderboard(prev => {
             const existingIndex = prev.findIndex(entry => entry.owner_id === newPlot.owner_id);
-            let nextLeaderboard = [...prev];
+            const nextLeaderboard = [...prev];
             if (existingIndex >= 0) {
               const entry = nextLeaderboard[existingIndex];
               const newTier = entry.tier + 1;
@@ -198,7 +200,7 @@ export default function OklahomaPlotMap() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [supabase]);
 
   const handlePlotClick = useCallback((plotId: number) => {
     if (plotDetails[plotId] || pendingPlots.includes(plotId)) return;
@@ -232,11 +234,11 @@ export default function OklahomaPlotMap() {
     setPendingPlots(pendingPlots.filter((id) => id !== activePlot));
     processedPlotsRef.current.add(activePlot);
     
-    const nextTier = (res as any).newTier;
+    const nextTier = (res as { newTier: number }).newTier;
 
     if (myProfile) {
       const initials = getInitials(myProfile.username);
-      const color = myProfile.color || '#3B82F6';
+      const color = getDeterministicColor(currentUserIdRef.current);
 
       setPlotDetails(prev => ({
         ...prev,
@@ -252,7 +254,7 @@ export default function OklahomaPlotMap() {
         if (!myUserId) return prev;
         
         const existingIndex = prev.findIndex(entry => entry.owner_id === myUserId);
-        let nextLeaderboard = [...prev];
+        const nextLeaderboard = [...prev];
         if (existingIndex >= 0) {
           const entry = nextLeaderboard[existingIndex];
           nextLeaderboard[existingIndex] = {
