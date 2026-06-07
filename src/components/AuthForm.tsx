@@ -211,7 +211,7 @@ export function AuthForm({
                     setIdentity(player.username);
                     setStep(2);
                   }}
-                  className="bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 text-white p-4 rounded-xl text-left transition-colors"
+                  className="bg-[#fbf8f1] backdrop-blur-md border border-white/10 hover:bg-[#eaddbd] text-[#4a2e15] p-4 rounded-xl text-left transition-colors font-serif"
                 >
                   <div className="font-medium truncate">{player.username}</div>
                 </button>
