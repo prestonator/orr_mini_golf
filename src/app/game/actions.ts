@@ -36,7 +36,17 @@ export async function claimPlot(plotId: number) {
 
   const visitId = visits[0].id
 
-  // 3. Check if plot is already owned
+  // 3. Check if they already own a plot
+  const { count: ownedPlotsCount } = await supabase
+    .from('plots')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', userId)
+
+  if (ownedPlotsCount && ownedPlotsCount > 0) {
+    return { error: 'You have already claimed a plot. You can only claim one plot total.' }
+  }
+
+  // 3b. Check if the requested plot is already owned
   const { data: plot } = await supabase
     .from('plots')
     .select('owner_id')
@@ -62,11 +72,11 @@ export async function claimPlot(plotId: number) {
     .update({ plot_claimed: true })
     .eq('id', visitId)
 
-  // Calculate new tier based on total plots owned
+  // Calculate new tier based on total visits
   const { count } = await supabase
-    .from('plots')
+    .from('visits')
     .select('*', { count: 'exact', head: true })
-    .eq('owner_id', userId)
+    .eq('user_id', userId)
 
   const newTier = count || 1;
 
@@ -92,6 +102,7 @@ export async function getMapState() {
   
   let userTier = 0
   let canClaim = false
+  let myPlotId = null
   let myProfile = null
 
   if (userId) {
@@ -105,22 +116,59 @@ export async function getMapState() {
       myProfile = { ...profile, full_name: profile.username }
     }
 
-    // Calculate userTier from the fetched plots
-    if (plots) {
-      userTier = plots.filter(p => p.owner_id === userId).length
-    }
-
-    const { data: visits } = await supabase
+    // Calculate userTier from visits
+    const { count: visitCount } = await supabase
       .from('visits')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('plot_claimed', false)
+      
+    userTier = visitCount || 0
+
+    // Check if user already owns a plot
+    const { data: userPlots } = await supabase
+      .from('plots')
+      .select('id')
+      .eq('owner_id', userId)
       .limit(1)
-    
-    canClaim = !!visits && visits.length > 0
+
+    if (userPlots && userPlots.length > 0) {
+      canClaim = false
+      myPlotId = userPlots[0].id
+    } else {
+      const { data: visits } = await supabase
+        .from('visits')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('plot_claimed', false)
+        .limit(1)
+      
+      canClaim = !!visits && visits.length > 0
+    }
   }
 
-  return { plots, currentUserId: userId, userTier, canClaim, myProfile }
+  const { data: allVisits } = await supabase
+    .from('visits')
+    .select('user_id, profiles(username)')
+  
+  const leaderboardMap = new Map()
+  if (allVisits) {
+    allVisits.forEach(v => {
+      const uid = v.user_id
+      const profileData = v.profiles 
+        ? (Array.isArray(v.profiles) ? v.profiles[0] : v.profiles) 
+        : null
+      const uname = profileData?.username || 'Anonymous'
+      if (!leaderboardMap.has(uid)) {
+        leaderboardMap.set(uid, { owner_id: uid, username: uname, visits: 0 })
+      }
+      leaderboardMap.get(uid).visits += 1
+    })
+  }
+
+  const leaderboardData = Array.from(leaderboardMap.values())
+  leaderboardData.sort((a, b) => b.visits - a.visits)
+
+  return { plots, currentUserId: userId, userTier, canClaim, myPlotId, myProfile, leaderboardData }
 }
 
 export async function getUserTier() {
@@ -129,9 +177,9 @@ export async function getUserTier() {
   
   const supabase = await createClient()
   const { count } = await supabase
-    .from('plots')
+    .from('visits')
     .select('*', { count: 'exact', head: true })
-    .eq('owner_id', userId)
+    .eq('user_id', userId)
     
   return count || 0
 }

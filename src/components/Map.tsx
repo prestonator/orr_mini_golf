@@ -2,18 +2,16 @@
 import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { getMapState, claimPlot } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
 import { signOut } from '@/app/auth/actions';
-import { getDeterministicColor } from '@/utils/colors';
 
 type LeaderboardEntry = {
   owner_id: string;
   username: string;
   initials: string;
-  color: string;
-  tier: number;
+  visits: number;
   stage: number;
 };
 
@@ -24,7 +22,7 @@ const PlotSquare = memo(({
   onClick 
 }: { 
   idx: number, 
-  details?: { initials: string, color: string, isMine: boolean }, 
+  details?: { initials: string, isMine: boolean }, 
   isPending: boolean, 
   onClick: (idx: number) => void 
 }) => {
@@ -32,26 +30,20 @@ const PlotSquare = memo(({
   const isOwnedByOther = details && !details.isMine;
   
   let plotStyle = "border border-gray-500/20 hover:bg-blue-400/40 hover:border-blue-400 cursor-pointer transition-all duration-150 flex items-center justify-center overflow-hidden";
-  let overlayStyle = {};
   
   if (isPending) {
     plotStyle = "bg-yellow-400/70 border-yellow-500 cursor-wait shadow-inner flex items-center justify-center overflow-hidden";
-  } else if (isOwnedByMe || isOwnedByOther) {
-    plotStyle = "cursor-not-allowed flex items-center justify-center overflow-hidden font-bold text-[0.45rem] shadow-sm animate-in zoom-in-75 duration-300";
-    overlayStyle = {
-      backgroundColor: `${details.color}80`, 
-      borderColor: details.color,
-      borderWidth: isOwnedByMe ? '2px' : '1px',
-      color: '#ffffff',
-      textShadow: '0px 0px 2px rgba(0,0,0,0.8)'
-    };
+  } else if (isOwnedByMe) {
+    plotStyle = "bg-green-500 cursor-not-allowed flex items-center justify-center overflow-hidden font-bold text-[0.45rem] shadow-sm animate-in zoom-in-75 duration-300 text-white border-2 border-green-700";
+  } else if (isOwnedByOther) {
+    plotStyle = "bg-gray-500 cursor-not-allowed flex items-center justify-center overflow-hidden font-bold text-[0.45rem] shadow-sm animate-in zoom-in-75 duration-300 text-white border border-gray-600";
   }
 
   return (
     <div
+      id={`plot-${idx}`}
       onClick={() => onClick(idx)}
       className={plotStyle}
-      style={overlayStyle}
       title={`Plot #${idx}`}
     >
       {details && !isPending && details.initials}
@@ -66,19 +58,22 @@ export default function OklahomaPlotMap() {
 
   // State Management
   const [pendingPlots, setPendingPlots] = useState<number[]>([]);
-  const [plotDetails, setPlotDetails] = useState<Record<number, { initials: string, color: string, isMine: boolean }>>({});
+  const [plotDetails, setPlotDetails] = useState<Record<number, { initials: string, isMine: boolean }>>({});
   const [userTier, setUserTier] = useState(0);
-  const [myProfile, setMyProfile] = useState<{ username: string, color: string } | null>(null);
+  const [myProfile, setMyProfile] = useState<{ username: string } | null>(null);
   const [canClaim, setCanClaim] = useState(false);
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [myPlotId, setMyPlotId] = useState<number | null>(null);
 
-  
   // Modal State
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [activePlot, setActivePlot] = useState<number | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Zoom reference
+  const transformWrapperRef = useRef<ReactZoomPanPinchRef>(null);
 
   // Configuration for 1200 plots
   const GRID_COLS = 40; 
@@ -97,11 +92,10 @@ export default function OklahomaPlotMap() {
 
   useEffect(() => {
     async function loadData() {
-      const { plots, currentUserId, userTier: tier, canClaim: _canClaim, myProfile: profile } = await getMapState();
+      const { plots, currentUserId, userTier: tier, canClaim: _canClaim, myPlotId: _myPlotId, myProfile: profile, leaderboardData } = await getMapState();
       currentUserIdRef.current = currentUserId || null;
       
-      const newPlotDetails: Record<number, { initials: string, color: string, isMine: boolean }> = {};
-      const ownerCounts: Record<string, { tier: number, username: string, color: string }> = {};
+      const newPlotDetails: Record<number, { initials: string, isMine: boolean }> = {};
 
       if (plots) {
         plots.forEach((p: { id: number, owner_id: string, profiles: { username: string } | { username: string }[] | null }) => {
@@ -111,37 +105,31 @@ export default function OklahomaPlotMap() {
               : null;
               
             const username = profileData?.username || 'Anonymous';
-            const color = getDeterministicColor(p.owner_id);
 
             newPlotDetails[p.id] = {
               initials: getInitials(username),
-              color: color,
               isMine: p.owner_id === currentUserId
             };
-
-            if (!ownerCounts[p.owner_id]) {
-              ownerCounts[p.owner_id] = { tier: 0, username, color };
-            }
-            ownerCounts[p.owner_id].tier++;
           }
         });
       }
       
-      const initialLeaderboard: LeaderboardEntry[] = Object.entries(ownerCounts).map(([owner_id, data]) => ({
-        owner_id,
-        username: data.username,
-        initials: getInitials(data.username),
-        color: data.color,
-        tier: data.tier,
-        stage: Math.min(26, data.tier + 1)
-      }));
-      initialLeaderboard.sort((a, b) => b.tier - a.tier);
-      setLeaderboard(initialLeaderboard);
+      if (leaderboardData) {
+        const initialLeaderboard = leaderboardData.map((data: { owner_id: string; username: string; visits: number }) => ({
+          owner_id: data.owner_id,
+          username: data.username,
+          initials: getInitials(data.username),
+          visits: data.visits,
+          stage: Math.min(26, data.visits + 1)
+        }));
+        setLeaderboard(initialLeaderboard);
+      }
 
       setPlotDetails(newPlotDetails);
       setMyProfile(profile);
       setUserTier(tier);
       setCanClaim(_canClaim);
+      setMyPlotId(_myPlotId ?? null);
       setLoading(false);
     }
     loadData();
@@ -154,45 +142,19 @@ export default function OklahomaPlotMap() {
           if (processedPlotsRef.current.has(newPlot.id)) return;
           processedPlotsRef.current.add(newPlot.id);
 
-          // Fetch the profile for the new owner to get their color/name
-          const { data: profile } = await supabase.from('profiles').select('username, color').eq('id', newPlot.owner_id).single();
+          // Fetch the profile for the new owner to get their name
+          const { data: profile } = await supabase.from('profiles').select('username').eq('id', newPlot.owner_id).single();
           
           const username = profile?.username || 'Anonymous';
-          const color = getDeterministicColor(newPlot.owner_id);
           const initials = getInitials(username);
 
           setPlotDetails(prev => ({
             ...prev,
             [newPlot.id]: {
               initials: initials,
-              color: color,
               isMine: newPlot.owner_id === currentUserIdRef.current
             }
           }));
-
-          setLeaderboard(prev => {
-            const existingIndex = prev.findIndex(entry => entry.owner_id === newPlot.owner_id);
-            const nextLeaderboard = [...prev];
-            if (existingIndex >= 0) {
-              const entry = nextLeaderboard[existingIndex];
-              const newTier = entry.tier + 1;
-              nextLeaderboard[existingIndex] = {
-                ...entry,
-                tier: newTier,
-                stage: Math.min(26, newTier + 1)
-              };
-            } else {
-              nextLeaderboard.push({
-                owner_id: newPlot.owner_id,
-                username: username,
-                initials: initials,
-                color: color,
-                tier: 1,
-                stage: 2
-              });
-            }
-            return nextLeaderboard.sort((a, b) => b.tier - a.tier);
-          });
         }
       })
       .subscribe();
@@ -202,11 +164,26 @@ export default function OklahomaPlotMap() {
     };
   }, [supabase]);
 
+  // Effect for zooming and redirecting when myPlotId is found
+  useEffect(() => {
+    if (!loading && myPlotId !== null) {
+      if (transformWrapperRef.current) {
+        // slight delay to let render happen
+        setTimeout(() => {
+          transformWrapperRef.current?.zoomToElement(`plot-${myPlotId}`, 2);
+          setTimeout(() => {
+            router.push('/game');
+          }, 2000);
+        }, 100);
+      }
+    }
+  }, [loading, myPlotId, router]);
+
   const handlePlotClick = useCallback((plotId: number) => {
     if (plotDetails[plotId] || pendingPlots.includes(plotId)) return;
     
     if (!canClaim) {
-      alert("You have already claimed a plot for this visit. Please check in again to claim another.");
+      alert("You have already claimed a plot. You can only claim one plot total.");
       return;
     }
 
@@ -238,42 +215,14 @@ export default function OklahomaPlotMap() {
 
     if (myProfile) {
       const initials = getInitials(myProfile.username);
-      const color = getDeterministicColor(currentUserIdRef.current);
 
       setPlotDetails(prev => ({
         ...prev,
         [activePlot as number]: {
           initials: initials,
-          color: color,
           isMine: true
         }
       }));
-
-      setLeaderboard(prev => {
-        const myUserId = currentUserIdRef.current;
-        if (!myUserId) return prev;
-        
-        const existingIndex = prev.findIndex(entry => entry.owner_id === myUserId);
-        const nextLeaderboard = [...prev];
-        if (existingIndex >= 0) {
-          const entry = nextLeaderboard[existingIndex];
-          nextLeaderboard[existingIndex] = {
-            ...entry,
-            tier: nextTier,
-            stage: Math.min(26, nextTier + 1)
-          };
-        } else {
-          nextLeaderboard.push({
-            owner_id: myUserId,
-            username: myProfile.username,
-            initials: initials,
-            color: color,
-            tier: nextTier,
-            stage: Math.min(26, nextTier + 1)
-          });
-        }
-        return nextLeaderboard.sort((a, b) => b.tier - a.tier);
-      });
     }
     
     setUserTier(nextTier);
@@ -334,8 +283,7 @@ export default function OklahomaPlotMap() {
             <div key={entry.owner_id} className="flex items-center gap-3">
               <div className="text-sm font-bold text-gray-400 w-4">{idx + 1}.</div>
               <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm"
-                style={{ backgroundColor: entry.color }}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm bg-gray-500"
               >
                 {entry.initials}
               </div>
@@ -349,6 +297,7 @@ export default function OklahomaPlotMap() {
       </div>
 
       <TransformWrapper
+        ref={transformWrapperRef}
         initialScale={1}
         minScale={0.5}
         maxScale={8}
