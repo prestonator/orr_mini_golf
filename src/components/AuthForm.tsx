@@ -10,6 +10,7 @@ import {
   UserPlus,
   Users,
   Wheat,
+  Search,
 } from "lucide-react";
 
 export function AuthForm({
@@ -26,8 +27,13 @@ export function AuthForm({
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clearedGlobalError, setClearedGlobalError] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const displayError = localError || (!clearedGlobalError ? errorMessage : null);
+
+  const filteredPlayers = players.filter(player =>
+    player.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     if (view !== 'signin-pin' && view !== 'signup') return;
@@ -130,6 +136,7 @@ export function AuthForm({
     setSelectedUser(null);
     setPin('');
     setIdentity('');
+    setSearchQuery('');
     setLocalError(null);
     setClearedGlobalError(true);
   };
@@ -217,7 +224,7 @@ export function AuthForm({
           </p>
           
           <button 
-            onClick={() => { setView('signin-list'); setLocalError(null); setClearedGlobalError(true); }}
+            onClick={() => { setView('signin-list'); setLocalError(null); setClearedGlobalError(true); setSearchQuery(''); }}
             className="w-full flex items-center justify-center p-4 bg-[#5c3a21] text-[#f4ecd8] hover:bg-[#4a2e15] transition-colors border-2 border-[#2c1e16] rounded shadow-md group"
           >
             <Users className="mr-3 text-[#d9c5a0] group-hover:scale-110 transition-transform" />
@@ -253,9 +260,22 @@ export function AuthForm({
           
           <p className="text-center text-[#8c6d46] text-sm mb-4">Find your name in the land registry below.</p>
           
+          <div className="relative mb-4">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={18} className="text-[#8c6d46]" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search registry..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 p-3 bg-[#fbf8f1] border-2 border-[#8c6d46] rounded text-[#4a2e15] font-serif focus:outline-none focus:border-[#8b3a3a] focus:ring-1 focus:ring-[#8b3a3a]"
+            />
+          </div>
+          
           <div className="max-h-64 overflow-y-auto border-2 border-[#8c6d46] bg-[#fbf8f1] rounded shadow-inner">
             <ul className="divide-y divide-[#d0b894]">
-              {players.map((player) => (
+              {filteredPlayers.map((player) => (
                 <li key={player.id}>
                   <button 
                     onClick={() => {
@@ -271,6 +291,9 @@ export function AuthForm({
                   </button>
                 </li>
               ))}
+              {filteredPlayers.length === 0 && players.length > 0 && (
+                <li className="p-4 text-center text-[#8c6d46] italic">No pioneers found.</li>
+              )}
               {players.length === 0 && (
                 <li className="p-4 text-center text-[#8c6d46] italic">No claims staked yet.</li>
               )}
