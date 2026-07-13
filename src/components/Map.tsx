@@ -6,6 +6,7 @@ import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'reac
 import { getMapState, claimPlot } from '@/app/game/actions';
 import { createClient } from '@/utils/supabase/client';
 import { signOut } from '@/app/auth/actions';
+import mapImage from '../../public/oklahoma-map-1889.jpg';
 
 type LeaderboardEntry = {
   owner_id: string;
@@ -65,6 +66,7 @@ export default function OklahomaPlotMap() {
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [myPlotId, setMyPlotId] = useState<number | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   // Modal State
   const [showClaimModal, setShowClaimModal] = useState(false);
@@ -166,7 +168,7 @@ export default function OklahomaPlotMap() {
 
   // Effect for zooming and redirecting when myPlotId is found
   useEffect(() => {
-    if (!loading && myPlotId !== null) {
+    if (!loading && myPlotId !== null && imageLoaded) {
       if (transformWrapperRef.current) {
         // slight delay to let render happen
         setTimeout(() => {
@@ -177,7 +179,7 @@ export default function OklahomaPlotMap() {
         }, 100);
       }
     }
-  }, [loading, myPlotId, router]);
+  }, [loading, myPlotId, router, imageLoaded]);
 
   const handlePlotClick = useCallback((plotId: number) => {
     if (plotDetails[plotId] || pendingPlots.includes(plotId)) return;
@@ -307,11 +309,11 @@ export default function OklahomaPlotMap() {
         <TransformComponent wrapperClass="!w-full !h-full" contentClass="flex items-center justify-center">
           <div className="relative" style={{ width: '1600px', maxWidth: 'none' }}>
             <Image 
-              src="/oklahoma-map-1889.jpg" 
+              src={mapImage} 
               alt="1889 Oklahoma Indian Territory Map" 
-              width={1600}
-              height={1200}
+              placeholder="blur"
               priority={true}
+              onLoad={() => setImageLoaded(true)}
               className="w-full h-auto block opacity-90 shadow-2xl border-4 border-gray-800"
               draggable={false}
             />
