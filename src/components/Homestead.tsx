@@ -15,10 +15,23 @@ interface AnimatedGroupProps {
 export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000, animType = 'drop' }: AnimatedGroupProps) {
   const active = currentStage >= stage;
   const [visible, setVisible] = useState(active);
+  const [initialStage] = useState(currentStage);
+
+  let delay = 0;
+  if (active) {
+    if (stage <= initialStage) {
+      const maxDelay = 2000;
+      delay = initialStage > 1 ? ((stage - 1) / (initialStage - 1)) * maxDelay : 0;
+    } else {
+      delay = 200;
+    }
+  }
 
   // The Drop Animation (Buildings/Objects)
   const { y } = useSpring({
+    from: { y: dropHeight },
     y: active ? (stage * 0.5) : dropHeight,
+    delay: delay,
     config: { mass: 6, tension: 40, friction: 22, clamp: true },
     onChange: ({ value }) => {
       if (!active && value.y >= dropHeight - 0.05) {
@@ -29,10 +42,12 @@ export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000
 
   // The Grow Animation (Plants/Crops)
   const { scale } = useSpring({
+    from: { scale: 0 },
     scale: active ? 1 : 0,
+    delay: delay,
     config: { mass: 1, tension: 120, friction: 14 },
     onChange: ({ value }) => {
-      if (!active && value.scale >= 0.99) {
+      if (!active && value.scale <= 0.01) {
         setVisible(false);
       }
     },
@@ -40,7 +55,9 @@ export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000
 
   // The Wobble Animation (Outhouse)
   const { rotateZ } = useSpring({
+    from: { rotateZ: 0.5 },
     rotateZ: active ? 0 : 0.5, // Starts tilted
+    delay: delay,
     config: { mass: 3, tension: 200, friction: 5 } // Highly bouncy/wobbly
   });
 
