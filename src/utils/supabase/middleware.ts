@@ -12,6 +12,8 @@ export async function updateSession(request: NextRequest) {
   if (
     !user &&
     request.nextUrl.pathname !== '/' &&
+    request.nextUrl.pathname !== '/login' &&
+    request.nextUrl.pathname !== '/quick-round-payment' &&
     !request.nextUrl.pathname.startsWith('/auth')
   ) {
     // no user, potentially respond by redirecting the user to the login page
@@ -20,7 +22,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
   
-  if (user && request.nextUrl.pathname === '/') {
+  if (user && request.nextUrl.pathname === '/login') {
     // user is signed in and on the login page, redirect to game
     const url = request.nextUrl.clone()
     url.pathname = '/game'
