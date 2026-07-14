@@ -1,18 +1,24 @@
-import { Stages } from './homestead/Stages'
-import React, { useState, useEffect } from 'react'
-import { useGLTF, Sparkles } from '@react-three/drei'
-import { useSpring, animated } from '@react-spring/three'
-import * as THREE from 'three'
+import { Stages } from "./homestead/Stages";
+import React, { useState, useEffect } from "react";
+import { useGLTF, Sparkles } from "@react-three/drei";
+import { useSpring, animated } from "@react-spring/three";
+import * as THREE from "three";
 
 interface AnimatedGroupProps {
   children: React.ReactNode;
   stage: number;
   currentStage: number;
   dropHeight?: number;
-  animType?: 'drop' | 'grow' | 'wobble';
+  animType?: "drop" | "grow" | "wobble";
 }
 
-export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000, animType = 'drop' }: AnimatedGroupProps) {
+export function AnimatedGroup({
+  children,
+  stage,
+  currentStage,
+  dropHeight = 3000,
+  animType = "drop",
+}: AnimatedGroupProps) {
   const active = currentStage >= stage;
   const [visible, setVisible] = useState(active);
   const [initialStage] = useState(currentStage);
@@ -21,7 +27,8 @@ export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000
   if (active) {
     if (stage <= initialStage) {
       const maxDelay = 2000;
-      delay = initialStage > 1 ? ((stage - 1) / (initialStage - 1)) * maxDelay : 0;
+      delay =
+        initialStage > 1 ? ((stage - 1) / (initialStage - 1)) * maxDelay : 0;
     } else {
       delay = 200;
     }
@@ -30,7 +37,7 @@ export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000
   // The Drop Animation (Buildings/Objects)
   const { y } = useSpring({
     from: { y: dropHeight },
-    y: active ? (stage * 0.5) : dropHeight,
+    y: active ? stage * 0.5 : dropHeight,
     delay: delay,
     config: { mass: 6, tension: 40, friction: 22, clamp: true },
     onChange: ({ value }) => {
@@ -58,20 +65,32 @@ export function AnimatedGroup({ children, stage, currentStage, dropHeight = 3000
     from: { rotateZ: 0.5 },
     rotateZ: active ? 0 : 0.5, // Starts tilted
     delay: delay,
-    config: { mass: 3, tension: 200, friction: 5 } // Highly bouncy/wobbly
+    config: { mass: 3, tension: 200, friction: 5 }, // Highly bouncy/wobbly
   });
 
   if (active && !visible) setVisible(true);
 
-  if (animType === 'grow') {
-    return <animated.group scale={scale} visible={visible}>{children}</animated.group>
+  if (animType === "grow") {
+    return (
+      <animated.group scale={scale} visible={visible}>
+        {children}
+      </animated.group>
+    );
   }
 
-  if (animType === 'wobble') {
-    return <animated.group position-y={y} rotation-z={rotateZ} visible={visible}>{children}</animated.group>
+  if (animType === "wobble") {
+    return (
+      <animated.group position-y={y} rotation-z={rotateZ} visible={visible}>
+        {children}
+      </animated.group>
+    );
   }
 
-  return <animated.group position-y={y} visible={visible}>{children}</animated.group>
+  return (
+    <animated.group position-y={y} visible={visible}>
+      {children}
+    </animated.group>
+  );
 }
 
 export function CelebrationEffect({ currentStage }: { currentStage: number }) {
@@ -86,14 +105,17 @@ export function CelebrationEffect({ currentStage }: { currentStage: number }) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function Homestead2({ currentStage, ...props }: React.ComponentPropsWithoutRef<'group'> & { currentStage: number }) {
+export function Homestead({
+  currentStage,
+  ...props
+}: React.ComponentPropsWithoutRef<"group"> & { currentStage: number }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { scene, nodes, materials } = useGLTF('/homestead.glb') as any
+  const { scene, nodes, materials } = useGLTF("/homestead.glb") as any;
 
   // THE MAGIC SLEEK UPGRADE
   useEffect(() => {
     if (!scene) return;
-    
+
     scene.traverse((child: THREE.Object3D) => {
       // If the item is a mesh (building, ground, tractor)
       if (child instanceof THREE.Mesh) {
@@ -104,18 +126,18 @@ export function Homestead2({ currentStage, ...props }: React.ComponentPropsWitho
         // 2. Make it look sleek, flat, and low-poly
         if (child.material) {
           child.material.flatShading = true; // Gives that crisp, faceted look
-          child.material.roughness = 0.9;    // Makes it perfectly matte like clay/paper
-          child.material.metalness = 0.0;    // Removes weird AI glossiness
+          child.material.roughness = 0.9; // Makes it perfectly matte like clay/paper
+          child.material.metalness = 0.0; // Removes weird AI glossiness
           child.material.needsUpdate = true; // Tells React to redraw the material
         }
       }
     });
   }, [scene]);
-  
+
   return (
     <group {...props} dispose={null}>
       <CelebrationEffect currentStage={currentStage} />
       <Stages nodes={nodes} materials={materials} currentStage={currentStage} />
     </group>
-  )
+  );
 }
